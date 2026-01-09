@@ -856,14 +856,16 @@ body {
 .search-box {
     position: relative;
     max-width: 300px;
+    min-width: 200px;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
     background: var(--bg);
     border: 2px solid var(--border);
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
     transition: all 0.2s;
+    height: fit-content;
 }
 
 .header .search-box {
@@ -874,6 +876,30 @@ body {
 
 .search-box:focus-within {
     border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-box input {
+    flex: 1;
+    width: 100%;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--text);
+    font-size: 0.9rem;
+    outline: none;
+    font-family: inherit;
+}
+
+.search-box input::placeholder {
+    color: var(--text-3);
+}
+
+.search-box span {
+    color: var(--text-3);
+    font-size: 1rem;
+    flex-shrink: 0;
 }
 
 .search-input {
@@ -958,6 +984,11 @@ body {
     margin-bottom: 0.75rem;
     flex-wrap: wrap;
     align-items: center;
+}
+
+.stage-filters .search-box {
+    height: fit-content;
+    align-self: center;
 }
 
 .stage-filter {
@@ -1810,6 +1841,30 @@ tbody tr:hover .quick-actions {
 .btn-secondary:hover {
     background: var(--bg-primary);
     color: var(--text-primary);
+}
+
+.btn-undo {
+    background: #f59e0b;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: all 0.2s;
+    font-weight: 600;
+    font-family: inherit;
+}
+
+.btn-undo:hover {
+    background: #d97706;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.btn-undo:active {
+    transform: translateY(0);
 }
 
 .btn-block {

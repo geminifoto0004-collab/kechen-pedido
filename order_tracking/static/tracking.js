@@ -153,7 +153,20 @@ function applyFilters() {
         // Stage Group 篩選
         let stageGroupMatch = false;
         if (currentFilter.stageGroup === 'all') {
-            stageGroupMatch = !['completed', 'cancelled'].includes(stageGroup);
+            // 全部：显示进行中的订单，以及根据checkbox显示已完成/已取消
+            if (['completed', 'cancelled'].includes(stageGroup)) {
+                // 已完成或已取消的订单，需要根据checkbox决定
+                if (stageGroup === 'completed' && currentFilter.showCompleted) {
+                    stageGroupMatch = true;
+                } else if (stageGroup === 'cancelled' && currentFilter.showCancelled) {
+                    stageGroupMatch = true;
+                } else {
+                    stageGroupMatch = false;
+                }
+            } else {
+                // 进行中的订单，总是显示
+                stageGroupMatch = true;
+            }
         } else {
             stageGroupMatch = stageGroup === currentFilter.stageGroup;
         }
@@ -164,12 +177,12 @@ function applyFilters() {
             substatusMatch = status === currentFilter.substatus;
         }
         
-        // 已完成/已取消篩選
+        // 已完成/已取消篩選（当选择了特定阶段时）
         let completedMatch = true;
-        if (stageGroup === 'completed' && !currentFilter.showCompleted) {
+        if (currentFilter.stageGroup === 'completed' && !currentFilter.showCompleted) {
             completedMatch = false;
         }
-        if (stageGroup === 'cancelled' && !currentFilter.showCancelled) {
+        if (currentFilter.stageGroup === 'cancelled' && !currentFilter.showCancelled) {
             completedMatch = false;
         }
         
@@ -1150,11 +1163,51 @@ function renderOrderTimeline(orderNumber, orderData, target = 'row') {
         <div class="timeline-detailed" id="timeline-detailed-${orderNumber}">
     `;
 
+    // 检查用户是否为管理员（通过检查页面上是否有管理员专属元素）
+    // 注意：时间轴是动态渲染的，需要检查当前页面的元素
+    let isAdmin = false;
+    try {
+        // 方法1: 检查操作列是否存在
+        const actionsCells = document.querySelectorAll('.actions-cell');
+        if (actionsCells.length > 0) {
+            isAdmin = true;
+        }
+        // 方法2: 检查新建订单按钮
+        if (!isAdmin) {
+            const newOrderBtn = document.querySelector('button[onclick*="openNewOrderModal"]');
+            if (newOrderBtn) {
+                isAdmin = true;
+            }
+        }
+        // 方法3: 检查是否有快速操作按钮
+        if (!isAdmin) {
+            const quickBtns = document.querySelectorAll('.quick-btn');
+            if (quickBtns.length > 0) {
+                isAdmin = true;
+            }
+        }
+    } catch (e) {
+        console.warn('检查管理员权限失败:', e);
+    }
+    
     history.forEach((item, index) => {
         const isLast = index === history.length - 1;
+        const isFirst = index === 0;
         const fromDate = parseDate(item.action_date);
         const toDate = isLast ? today : parseDate(history[index + 1].action_date);
         const stayDays = diffDays(fromDate, toDate);
+        
+        // 获取上一个状态（用于撤销）- 需要确保不是订单创建步骤
+        let previousStatus = null;
+        let canUndo = false;
+        if (isLast && !isFirst && index > 0) {
+            const prevItem = history[index - 1];
+            // 只有当上一步不是订单创建时才能撤销
+            if (prevItem && prevItem.from_status !== null) {
+                previousStatus = prevItem.to_status;
+                canUndo = true;
+            }
+        }
 
         detailedHtml += `
             <div class="step-card ${isLast ? 'current' : ''}">
@@ -1171,6 +1224,13 @@ function renderOrderTimeline(orderNumber, orderData, target = 'row') {
                     </div>
                     ${item.notes ? `<div class="step-card-note">${item.notes}</div>` : ''}
                     ${item.operator ? `<div class="timeline-operator">操作人：${item.operator}</div>` : ''}
+                    ${canUndo && previousStatus && isAdmin ? `
+                        <div style="margin-top: 0.75rem;">
+                            <button class="btn-undo" onclick="undoLastStep('${orderNumber}', '${previousStatus}', '${item.to_status}')">
+                                ↩️ 撤銷此步驟
+                            </button>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
         `;
@@ -1373,22 +1433,32 @@ function confirmCancelOrder() {
 }
 
 function toggleCompletedOrders(checkbox) {
-    const completedRows = document.querySelectorAll('tr[data-stage-group="completed"]');
-    completedRows.forEach(row => {
-        row.style.display = checkbox.checked ? '' : 'none';
-    });
+    currentFilter.showCompleted = checkbox.checked;
+    applyFilters();
 }
 
 function toggleCancelledOrders(checkbox) {
-    const cancelledRows = document.querySelectorAll('tr[data-stage-group="cancelled"]');
-    cancelledRows.forEach(row => {
-        row.style.display = checkbox.checked ? '' : 'none';
-    });
+    currentFilter.showCancelled = checkbox.checked;
+    applyFilters();
 }
 
 // ==================== 首頁額外初始化 ====================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 初始化筛选状态 - 根据 checkbox 的初始状态
+    const completedCheckbox = document.getElementById('toggleCompleted');
+    const cancelledCheckbox = document.getElementById('toggleCancelled');
+    
+    if (completedCheckbox) {
+        currentFilter.showCompleted = completedCheckbox.checked;
+    }
+    if (cancelledCheckbox) {
+        currentFilter.showCancelled = cancelledCheckbox.checked;
+    }
+    
+    // 应用初始筛选
+    applyFilters();
+    
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         searchInput.addEventListener('input', function() {
@@ -1426,5 +1496,47 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStageFilters('all');
     }
 });
+
+// ==================== 撤銷最後一步功能 ====================
+
+async function undoLastStep(orderNumber, restoreStatus, currentStatus) {
+    // 確認對話框
+    const confirmed = confirm(
+        `⚠️ 確認撤銷操作？\n\n` +
+        `訂單：${orderNumber}\n` +
+        `當前狀態：${currentStatus}\n` +
+        `將恢復到：${restoreStatus}\n\n` +
+        `此操作會永久刪除最後一步記錄！`
+    );
+    
+    if (!confirmed) return;
+    
+    // 可選：詢問原因
+    const reason = prompt('撤銷原因（選填）：');
+    
+    try {
+        const response = await fetch(`/tracking/api/orders/${encodeURIComponent(orderNumber)}/undo-last-step`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: reason || '' })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            if (typeof showToast === 'function') {
+                showToast('✅ 撤銷成功', result.message);
+            } else {
+                alert('✅ ' + result.message);
+            }
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            alert('❌ 撤銷失敗：' + result.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ 網絡錯誤');
+    }
+}
 
 

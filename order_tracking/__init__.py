@@ -346,7 +346,7 @@ def order_new():
         ''', (order_id, order_number, initial_status, order_date, session.get('display_name', 'system')))
         
         # 更新燈號
-        update_status_light(order_id)
+        update_status_light(order_id, conn)
         
         conn.commit()
         conn.close()
@@ -397,7 +397,7 @@ def order_edit(order_number):
             order_number
         ))
         
-        update_status_light(order['id'])
+        update_status_light(order['id'], conn)
         conn.commit()
         conn.close()
         
@@ -539,6 +539,102 @@ def api_order_detail(order_number):
     
     return jsonify({'success': True, 'data': order})
 
+@tracking_bp.route('/api/orders', methods=['POST'])
+@api_admin_required
+def api_create_order():
+    """新建訂單API"""
+    data = request.get_json()
+    
+    # 驗證必填字段
+    required_fields = ['order_number', 'customer_name', 'order_date']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({
+                'success': False, 
+                'error': f'{field} 為必填項',
+                'code': 'MISSING_REQUIRED_FIELD'
+            }), 400
+    
+    # 檢查訂單號是否已存在
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT id FROM orders WHERE order_number = ?', (data['order_number'],))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({
+            'success': False,
+            'error': '訂單號已存在',
+            'code': 'DUPLICATE_ORDER_NUMBER'
+        }), 400
+    
+    # 插入訂單
+    try:
+        cursor.execute('''
+            INSERT INTO orders (
+                order_number, customer_name, order_date,
+                product_code, quantity, factory,
+                production_type, expected_delivery_date,
+                current_status, last_status_change_date,
+                notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data['order_number'],
+            data['customer_name'],
+            data['order_date'],
+            data.get('product_code'),
+            data.get('quantity'),
+            data.get('factory'),
+            data.get('production_type'),
+            data.get('expected_delivery_date'),
+            '新訂單',
+            data['order_date'],
+            data.get('notes')
+        ))
+        
+        order_id = cursor.lastrowid
+        
+        # 記錄初始狀態歷史
+        cursor.execute('''
+            INSERT INTO status_history (
+                order_id, order_number, from_status, to_status,
+                action_date, operator, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            order_id,
+            data['order_number'],
+            None,
+            '新訂單',
+            data['order_date'],
+            g.current_user.get('username', 'system'),
+            '訂單創建'
+        ))
+        
+        # 更新燈號
+        update_status_light(order_id, conn)
+        
+        conn.commit()
+        
+        # 獲取完整訂單信息返回
+        cursor.execute('SELECT * FROM orders WHERE id = ?', (order_id,))
+        order = dict(cursor.fetchone())
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': '訂單創建成功',
+            'data': order
+        }), 201
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'code': 'DATABASE_ERROR'
+        }), 500
+
 @tracking_bp.route('/api/orders/quick-update', methods=['POST'])
 @api_admin_required
 def api_quick_update():
@@ -618,7 +714,7 @@ def api_quick_update():
     ''', (new_status, action_date, order_number))
     
     # 更新燈號
-    update_status_light(order['id'])
+    update_status_light(order['id'], conn)
     
     conn.commit()
     conn.close()
@@ -778,6 +874,89 @@ def api_stats():
                 'yellow': yellow,
                 'green': green
             }
+        }
+    })
+
+@tracking_bp.route('/api/orders/<order_number>/undo-last-step', methods=['POST'])
+@api_admin_required
+def api_undo_last_step(order_number):
+    """撤銷最後一步（硬刪除）"""
+    data = request.get_json() or {}
+    reason = data.get('reason', '')
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 1. 獲取訂單
+    cursor.execute('SELECT * FROM orders WHERE order_number = ?', (order_number,))
+    order = cursor.fetchone()
+    if not order:
+        conn.close()
+        return jsonify({'success': False, 'error': '訂單不存在'}), 404
+    
+    order = dict(order)
+    
+    # 2. 獲取最後兩步
+    cursor.execute('''
+        SELECT * FROM status_history 
+        WHERE order_number = ? 
+        ORDER BY action_date DESC, id DESC 
+        LIMIT 2
+    ''', (order_number,))
+    history = cursor.fetchall()
+    
+    if len(history) < 2:
+        conn.close()
+        return jsonify({'success': False, 'error': '沒有可撤銷的步驟'}), 400
+    
+    last_step = dict(history[0])
+    previous_step = dict(history[1])
+    
+    # 3. 不能撤銷訂單創建
+    if previous_step['from_status'] is None:
+        conn.close()
+        return jsonify({'success': False, 'error': '不能撤銷訂單創建'}), 400
+    
+    # 4. 記錄到操作日誌
+    cursor.execute('''
+        INSERT INTO audit_log (
+            action_type, order_number, old_status, new_status,
+            operator, reason
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    ''', (
+        'UNDO_STEP',
+        order_number,
+        last_step['to_status'],
+        previous_step['to_status'],
+        g.current_user.get('username', 'system'),
+        reason or '撤銷操作'
+    ))
+    
+    # 5. 硬刪除最後一步
+    cursor.execute('DELETE FROM status_history WHERE id = ?', (last_step['id'],))
+    
+    # 6. 恢復訂單到上一個狀態
+    cursor.execute('''
+        UPDATE orders 
+        SET current_status = ?,
+            last_status_change_date = ?,
+            status_days = 0,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE order_number = ?
+    ''', (previous_step['to_status'], previous_step['action_date'], order_number))
+    
+    # 7. 更新燈號
+    update_status_light(order['id'], conn)
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'message': f'已撤銷，訂單恢復到「{previous_step["to_status"]}」',
+        'data': {
+            'order_number': order_number,
+            'restored_status': previous_step['to_status']
         }
     })
 

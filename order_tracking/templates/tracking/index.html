@@ -60,6 +60,15 @@
         </div>
     </div>
     
+    <!-- ====== 新建訂單按鈕 ====== -->
+    {% if session.get('role') == 'admin' %}
+    <div style="margin-bottom: 1rem; display: flex; justify-content: flex-end;">
+        <button class="btn btn-primary" onclick="openNewOrderModal()" style="padding: 0.6rem 1.2rem; font-size: 0.95rem;">
+            ➕ 新建訂單
+        </button>
+    </div>
+    {% endif %}
+    
     <!-- ====== 流程階段篩選列（版面同 v10） ====== -->
     <div class="stage-filters">
         <button class="stage-btn active" onclick="filterByStageGroup('all', this)">
@@ -988,4 +997,84 @@
 
 {% endblock %}
 
-{% block extra_js %}{% endblock %}
+{% block extra_js %}
+<!-- 新建訂單 Modal（簡化版） -->
+<div class="modal-overlay" id="newOrderModal">
+    <div class="modal" style="max-width: 600px;">
+        <div class="modal-header">
+            <div class="modal-title">➕ 新建訂單</div>
+            <button class="modal-close" onclick="closeNewOrderModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <form id="newOrderForm" onsubmit="event.preventDefault(); submitNewOrder();">
+                <div class="form-group">
+                    <label class="form-label">
+                        訂單號 <span style="color: red;">*</span>
+                    </label>
+                    <input type="text" id="newOrderNumber" class="form-input" required placeholder="例如：ORD-2026-001">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        客戶名稱 <span style="color: red;">*</span>
+                    </label>
+                    <input type="text" id="newCustomerName" class="form-input" required placeholder="輸入客戶名稱">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">
+                        訂單日期 <span style="color: red;">*</span>
+                    </label>
+                    <input type="date" id="newOrderDate" class="form-input" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">產品編號</label>
+                    <input type="text" id="newProductCode" class="form-input" placeholder="例如：PRD-2026-XXX">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">產品類型</label>
+                    <input type="text" id="newProductName" class="form-input" placeholder="例如：數碼印花、活性印花">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">數量</label>
+                    <input type="text" id="newQuantity" class="form-input" placeholder="例如：500 碼">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">生產工廠</label>
+                    <select id="newFactory" class="form-input">
+                        <option value="">請選擇</option>
+                        <option value="廣州工廠">廣州工廠</option>
+                        <option value="深圳工廠">深圳工廠</option>
+                        <option value="東莞工廠">東莞工廠</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">生產類型</label>
+                    <input type="text" id="newProductionType" class="form-input" placeholder="例如：數碼印花">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">預計交貨日期</label>
+                    <input type="date" id="newDeliveryDate" class="form-input">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">備註</label>
+                    <textarea id="newOrderNotes" class="form-textarea" rows="3" placeholder="輸入訂單相關的特殊要求、注意事項等"></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="closeNewOrderModal()">取消</button>
+            <button class="modal-btn confirm" onclick="submitNewOrder()">✓ 提交訂單</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('tracking_bp.static', filename='new_order.js') }}"></script>
+{% endblock %}

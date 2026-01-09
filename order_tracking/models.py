@@ -43,6 +43,9 @@ def init_db():
             order_number VARCHAR(50) UNIQUE NOT NULL,
             customer_id INTEGER,
             customer_name VARCHAR(100) NOT NULL,
+            product_code VARCHAR(50),
+            quantity VARCHAR(50),
+            factory VARCHAR(100),
             order_date DATE NOT NULL,
             current_status VARCHAR(50) NOT NULL DEFAULT '新訂單',
             status_light VARCHAR(10) NOT NULL DEFAULT 'green',
@@ -50,7 +53,6 @@ def init_db():
             last_status_change_date DATE,
             production_type VARCHAR(100),
             product_name VARCHAR(100),
-            product_code VARCHAR(50),
             pattern_code VARCHAR(50),
             expected_delivery_date DATE,
             notes TEXT,
@@ -128,6 +130,20 @@ def init_db():
         )
     ''')
     
+    # 8. 操作日誌表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type VARCHAR(50) NOT NULL,
+            order_number VARCHAR(50),
+            old_status VARCHAR(50),
+            new_status VARCHAR(50),
+            operator VARCHAR(50) NOT NULL,
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     # 創建索引
     indexes = [
         "CREATE INDEX IF NOT EXISTS idx_order_number ON orders(order_number)",
@@ -142,7 +158,8 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_revision_number ON revisions(revision_number)",
         "CREATE INDEX IF NOT EXISTS idx_revision_customer ON revisions(customer_name)",
         "CREATE INDEX IF NOT EXISTS idx_revision_status ON revisions(current_status)",
-        "CREATE INDEX IF NOT EXISTS idx_images_item ON images(item_type, item_id)"
+        "CREATE INDEX IF NOT EXISTS idx_images_item ON images(item_type, item_id)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_order ON audit_log(order_number)"
     ]
     
     for index_sql in indexes:
@@ -157,6 +174,34 @@ def init_db():
             cursor.execute("ALTER TABLE orders ADD COLUMN product_name VARCHAR(100)")
         except:
             pass
+    
+    # 檢查並添加新字段（兼容舊數據庫）
+    try:
+        cursor.execute("SELECT product_code FROM orders LIMIT 1")
+    except:
+        try:
+            cursor.execute("ALTER TABLE orders ADD COLUMN product_code VARCHAR(50)")
+            print("✅ 成功添加字段：product_code")
+        except Exception as e:
+            print(f"⚠️ 添加字段 product_code 失敗或已存在: {e}")
+    
+    try:
+        cursor.execute("SELECT quantity FROM orders LIMIT 1")
+    except:
+        try:
+            cursor.execute("ALTER TABLE orders ADD COLUMN quantity VARCHAR(50)")
+            print("✅ 成功添加字段：quantity")
+        except Exception as e:
+            print(f"⚠️ 添加字段 quantity 失敗或已存在: {e}")
+    
+    try:
+        cursor.execute("SELECT factory FROM orders LIMIT 1")
+    except:
+        try:
+            cursor.execute("ALTER TABLE orders ADD COLUMN factory VARCHAR(100)")
+            print("✅ 成功添加字段：factory")
+        except Exception as e:
+            print(f"⚠️ 添加字段 factory 失敗或已存在: {e}")
     
     # 初始化用戶
     try:
@@ -277,9 +322,13 @@ def calculate_status_light(order):
     
     return 'green'
 
-def update_status_light(order_id):
+def update_status_light(order_id, conn=None):
     """更新訂單燈號"""
-    conn = get_db()
+    should_close = False
+    if conn is None:
+        conn = get_db()
+        should_close = True
+    
     cursor = conn.cursor()
     
     cursor.execute('SELECT * FROM orders WHERE id = ?', (order_id,))
@@ -296,7 +345,8 @@ def update_status_light(order_id):
         ''', (light, (date.today() - date.fromisoformat(order['last_status_change_date'])).days if order['last_status_change_date'] else 0, order_id))
         conn.commit()
     
-    conn.close()
+    if should_close:
+        conn.close()
 
 def generate_revision_number():
     """生成修圖編號"""
