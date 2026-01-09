@@ -1,0 +1,2578 @@
+/**
+ * 訂單流程追蹤系統 - 統一樣式表
+ * 淺色主題設計（基於 v10.html）
+ */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+    --bg: #fafafa;
+    --card: #ffffff;
+    --text: #171717;
+    --text-2: #525252;
+    --text-3: #a3a3a3;
+    --border: #e5e5e5;
+    --blue: #2563eb;
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --yellow: #f59e0b;
+    --yellow-bg: #fffbeb;
+    --green: #10b981;
+    --green-bg: #f0fdf4;
+    --gray: #6b7280;
+    --gray-bg: #f9fafb;
+    
+    /* 兼容舊變量 */
+    --bg-primary: var(--bg);
+    --bg-secondary: var(--card);
+    --bg-hover: var(--gray-bg);
+    --accent-blue: var(--blue);
+    --accent-cyan: #06b6d4;
+    --status-danger: var(--red);
+    --status-warning: var(--yellow);
+    --status-success: var(--green);
+    --text-primary: var(--text);
+    --text-secondary: var(--text-2);
+    --text-muted: var(--text-3);
+    --border-color: var(--border);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    font-size: 0.9rem;
+}
+
+/* ==================== Header（參考 v10.html）==================== */
+.header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-content {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.title {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.header .search-box {
+    flex: 1;
+    max-width: 400px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s;
+}
+
+.header .search-box:focus-within {
+    border-color: var(--blue);
+}
+
+.header .search-box input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 0.9rem;
+}
+
+.nav-link {
+    color: var(--text-2);
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.nav-link:hover {
+    color: var(--blue);
+    background: var(--bg);
+}
+
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.user-name {
+    color: var(--text-2);
+}
+
+/* ==================== 應用佈局（側邊欄 + 主內容）==================== */
+.app-layout {
+    display: flex;
+    min-height: calc(100vh - 60px);
+}
+
+/* ==================== 左側邊欄 ==================== */
+.sidebar {
+    width: 220px;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    padding: 1rem 0;
+    flex-shrink: 0;
+}
+
+.sidebar-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0 1rem;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: var(--text-2);
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.95rem;
+    width: 100%;
+    text-align: left;
+}
+
+.sidebar-item:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.sidebar-item.active {
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--blue);
+    border-left: 3px solid var(--blue);
+}
+
+.sidebar-icon {
+    font-size: 1.2rem;
+    width: 24px;
+    text-align: center;
+}
+
+.sidebar-text {
+    font-weight: 500;
+}
+
+.sidebar-button {
+    margin-top: 0.5rem;
+}
+
+.sidebar-button:hover {
+    background: var(--blue) !important;
+    color: white !important;
+}
+
+/* 可摺疊側邊欄 */
+.app-layout.collapsed .sidebar {
+    width: 56px;
+}
+
+.app-layout.collapsed .sidebar-text {
+    display: none;
+}
+
+.app-layout.collapsed .main-content {
+    /* 給右側更多空間 */
+    padding-left: 0.5rem;
+}
+
+.sidebar-toggle {
+    position: absolute;
+    top: 72px;
+    left: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    color: var(--text-3);
+    z-index: 50;
+}
+
+.sidebar-toggle:hover {
+    color: var(--blue);
+    border-color: var(--blue);
+}
+
+/* ==================== Container（參考 v10.html）==================== */
+.container {
+    width: 100%;
+    padding: 1rem 1rem;
+    box-sizing: border-box;
+}
+
+/* ==================== 主內容區 ==================== */
+.main-content {
+    flex: 1;
+    min-height: calc(100vh - 60px);
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    overflow-y: auto;
+}
+
+/* Detail Row（詳情行） */
+.detail-row {
+    display: none;
+    background: var(--bg);
+}
+
+.detail-row.show {
+    display: table-row;
+}
+
+.detail-content {
+    padding: 1rem 1rem 1rem 2rem;
+    border-left: 3px solid var(--blue);
+}
+
+/* Timeline in list detail (參考 order_detail 風格) */
+.timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 1.25rem;
+    border-left: 2px solid var(--border-color);
+    padding-left: 1.75rem;
+}
+
+.timeline-item:last-child {
+    border-left: none;
+    padding-bottom: 0;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -7px;
+    top: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--blue);
+    border: 2px solid var(--bg);
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.timeline-status {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+.timeline-date {
+    color: var(--text-3);
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.timeline-notes {
+    color: var(--text-2);
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.timeline-operator {
+    color: var(--text-3);
+    font-size: 0.8rem;
+}
+
+.timeline-title {
+    font-size: 0.8rem;
+    color: var(--text-3);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.timeline-empty {
+    font-size: 0.85rem;
+    color: var(--text-2);
+}
+
+/* ========= 列表展開 - 流程時間軸（參考 v10.html 視覺） ========= */
+.timeline-horizontal {
+    display: flex;
+    align-items: stretch;
+    gap: 1.5rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--bg);
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+}
+
+.timeline-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-width: 160px;
+    position: relative;
+}
+
+.timeline-dot-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.timeline-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    background: var(--card);
+    border: 2px solid var(--border);
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.1);
+}
+
+.timeline-step.completed .timeline-dot {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+}
+
+.timeline-step.current .timeline-dot {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #fff;
+}
+
+.timeline-step::after {
+    content: '';
+    position: absolute;
+    left: 13px;
+    top: 32px;
+    width: 2px;
+    height: 40px;
+    background: linear-gradient(to bottom, var(--border), transparent);
+}
+
+.timeline-step:last-child::after {
+    display: none;
+}
+
+.timeline-step-info {
+    flex: 1;
+}
+
+.timeline-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+}
+
+.timeline-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+
+.timeline-meta .timeline-date {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.timeline-meta .timeline-duration {
+    font-weight: 500;
+}
+
+.timeline-summary-bar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--card);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+}
+
+.timeline-summary-bar .summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.timeline-summary-bar .summary-label {
+    font-size: 0.7rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.timeline-summary-bar .summary-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.timeline-summary-bar .summary-value.danger {
+    color: #ef4444;
+}
+
+.timeline-toggle-btn {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg);
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    color: var(--blue);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.timeline-toggle-btn:hover {
+    background: rgba(37, 99, 235, 0.05);
+    border-color: var(--blue);
+}
+
+.timeline-detailed {
+    display: none;
+    margin-top: 1rem;
+}
+
+.timeline-detailed.show {
+    display: block;
+}
+
+.step-card {
+    background: var(--card);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.15s ease-in-out;
+}
+
+.step-card.current {
+    border-color: var(--blue);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+    background: rgba(37, 99, 235, 0.03);
+}
+
+.step-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.step-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.step-card.current .step-card-icon {
+    background: var(--blue);
+    color: #fff;
+}
+
+.step-card-name {
+    flex: 1;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.step-card-date {
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-3);
+}
+
+.step-card-body {
+    margin-left: 40px;
+}
+
+.step-card-duration {
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-2);
+    margin-bottom: 0.5rem;
+}
+
+.step-card.current .step-card-duration {
+    color: #ef4444;
+    font-weight: 700;
+}
+
+.step-card-note {
+    font-size: 0.85rem;
+    color: var(--text-2);
+    background: var(--bg);
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    border-left: 3px solid var(--blue);
+}
+
+/* ==================== 登入頁 ==================== */
+.login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: var(--bg);
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 2rem;
+}
+
+.login-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2.5rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
+}
+
+.login-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.login-subtitle {
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.login-form {
+    margin-bottom: 1.5rem;
+}
+
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.alert-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--status-danger);
+}
+
+.login-hint {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.login-hint ul {
+    margin-top: 0.5rem;
+    padding-left: 1.5rem;
+}
+
+/* ==================== 儀表板 ==================== */
+.dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.page-subtitle {
+    color: var(--text-secondary);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.stat-card.stat-danger {
+    border-left: 4px solid var(--status-danger);
+}
+
+.stat-card.stat-warning {
+    border-left: 4px solid var(--status-warning);
+}
+
+.stat-card.stat-success {
+    border-left: 4px solid var(--status-success);
+}
+
+.stat-icon {
+    font-size: 2rem;
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.section-header h2 {
+    font-size: 1.3rem;
+}
+
+.todo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.todo-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: all 0.2s;
+}
+
+.todo-item:hover {
+    border-color: var(--accent-blue);
+}
+
+.todo-status {
+    font-size: 1.5rem;
+}
+
+.todo-content {
+    flex: 1;
+}
+
+.todo-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.order-link {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.order-link:hover {
+    text-decoration: underline;
+}
+
+.customer-name {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.todo-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.days {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.todo-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+}
+
+.quick-action-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.quick-action-btn:hover {
+    border-color: var(--accent-blue);
+    background: var(--bg-hover);
+}
+
+.action-icon {
+    font-size: 2rem;
+}
+
+.action-text {
+    font-size: 0.9rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+/* ==================== 工具欄（參考 v10.html）==================== */
+.toolbar {
+    background: transparent;
+    border-bottom: none;
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.logo {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.search-box {
+    position: relative;
+    max-width: 300px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s;
+}
+
+.header .search-box {
+    flex: 1;
+    max-width: 400px;
+    margin: 0 2rem;
+}
+
+.search-box:focus-within {
+    border-color: var(--blue);
+}
+
+.search-input {
+    width: 100%;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--text);
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.search-icon {
+    color: var(--text-3);
+    pointer-events: none;
+}
+
+.toolbar-buttons {
+    display: flex;
+    gap: 0.8rem;
+}
+
+/* ==================== Stats（統計卡片，參考 v10.html）==================== */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.stat {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.stat:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.stat-icon {
+    font-size: 1.75rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--text-2);
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.stat.red .stat-value {
+    color: var(--red);
+}
+
+.stat.yellow .stat-value {
+    color: var(--yellow);
+}
+
+.stat.green .stat-value {
+    color: var(--green);
+}
+
+/* ==================== Stage Filters（階段篩選器，參考 v10.html）==================== */
+.stage-filters {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.stage-filter {
+    position: relative;
+}
+
+.stage-btn {
+    padding: 0.4rem 0.75rem;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: inherit;
+}
+
+.stage-btn:hover {
+    border-color: var(--blue);
+}
+
+.stage-btn.active {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: white;
+}
+
+.stage-btn.pending {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: white;
+}
+
+.stage-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    background: rgba(0,0,0,0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+}
+
+.stage-btn.active .stage-count,
+.stage-btn.pending .stage-count {
+    background: rgba(255,255,255,0.2);
+}
+
+/* ==================== Substatus Dropdown（子狀態下拉菜單）==================== */
+.substatus-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    padding: 0.5rem;
+    min-width: 220px;
+    z-index: 50;
+}
+
+.substatus-dropdown.show {
+    display: block;
+}
+
+.substatus-label {
+    font-size: 0.7rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+}
+
+.substatus-option {
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.substatus-option:hover {
+    background: var(--bg);
+}
+
+.substatus-option.active {
+    background: var(--blue);
+    color: white;
+}
+
+.substatus-option .count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-3);
+}
+
+.substatus-option.active .count {
+    color: rgba(255,255,255,0.8);
+}
+
+/* ==================== Filter Checkbox（篩選複選框）==================== */
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 6px;
+    user-select: none;
+    border: 2px solid transparent;
+}
+
+.filter-checkbox:hover {
+    background: var(--bg);
+    border-color: var(--border);
+}
+
+.filter-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--blue);
+}
+
+.filter-checkbox span {
+    color: var(--text-2);
+    font-weight: 400;
+}
+
+.filter-checkbox:has(input:checked) {
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.filter-checkbox:has(input:checked) span {
+    color: var(--blue);
+    font-weight: 600;
+}
+
+/* ==================== 統計欄（保留用於篩選欄）==================== */
+.stats-bar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.8rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    font-size: 0.9rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+/* ==================== Tab導航欄（參考 V8.html）==================== */
+.tabs-bar {
+    background: var(--bg-secondary);
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    padding: 0 1.5rem;
+}
+
+.tab {
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    font-weight: 500;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    top: 2px;
+    text-decoration: none;
+}
+
+.tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.tab.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+}
+
+.tab-badge {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--accent-cyan);
+    padding: 0.2rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ==================== 篩選欄（參考 V8.html）==================== */
+.filters-container {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stage-filter-bar, .light-filter-bar {
+    padding: 0.8rem 1.5rem;
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+    overflow-x: auto;
+}
+
+.stage-filter-bar {
+    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+.filter-label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.filter-btn {
+    padding: 0.5rem 1rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+}
+
+.filter-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.filter-btn.active {
+    background: var(--accent-blue);
+    color: white;
+    border-color: var(--accent-blue);
+    font-weight: 600;
+}
+
+.light-filter-btn {
+    padding: 0.6rem 1.2rem;
+    font-weight: 600;
+}
+
+.light-filter-btn.red.active {
+    background: var(--status-danger);
+    border-color: var(--status-danger);
+    color: white;
+}
+
+.light-filter-btn.yellow.active {
+    background: var(--status-warning);
+    border-color: var(--status-warning);
+    color: white;
+}
+
+.light-filter-btn.green.active {
+    background: var(--status-success);
+    border-color: var(--status-success);
+    color: white;
+}
+
+/* ==================== 當前篩選提示（參考 V8.html）==================== */
+.filter-hint {
+    padding: 0.5rem 1rem;
+    background: rgba(37, 99, 235, 0.05);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: var(--text-2);
+}
+
+.filter-hint strong {
+    color: var(--blue);
+}
+
+/* ==================== 訂單列表頁 ==================== */
+.orders-page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 1.5rem 0 0;
+}
+
+/* 如果 orders-page 在 main-content 中，需要覆盖 toolbar 样式 */
+.orders-page > .toolbar {
+    background: transparent;
+    border-bottom: none;
+    padding: 0 2rem 1rem;
+}
+
+.stats-bar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.8rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    font-size: 0.9rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+.stat-red { color: #fca5a5; }
+.stat-yellow { color: #fcd34d; }
+.stat-green { color: #6ee7b7; }
+
+.tabs-bar {
+    background: var(--bg-secondary);
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    padding: 0 1.5rem;
+    overflow-x: auto;
+}
+
+.tab {
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    top: 2px;
+    white-space: nowrap;
+}
+
+.tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.tab.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+}
+
+.filters-container {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stage-filter-bar, .light-filter-bar {
+    padding: 0.8rem 1.5rem;
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+    overflow-x: auto;
+}
+
+.stage-filter-bar {
+    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+.filter-label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.filter-btn {
+    padding: 0.5rem 1rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.filter-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.filter-btn.active {
+    background: var(--accent-blue);
+    color: white;
+    border-color: var(--accent-blue);
+    font-weight: 600;
+}
+
+.light-filter-btn.red.active {
+    background: var(--status-danger);
+    border-color: var(--status-danger);
+}
+
+.light-filter-btn.yellow.active {
+    background: var(--status-warning);
+    border-color: var(--status-warning);
+}
+
+.light-filter-btn.green.active {
+    background: var(--status-success);
+    border-color: var(--status-success);
+}
+
+/* ==================== Table Wrapper（參考 v10.html）==================== */
+.table-wrapper {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100%;
+}
+
+.table-container {
+    overflow-x: auto;
+    width: 100%;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+thead {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+}
+
+th {
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+}
+
+tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    cursor: pointer;
+}
+
+tbody tr:hover {
+    background: var(--bg);
+}
+
+tbody tr.row-red,
+tbody tr.row-danger {
+    background: linear-gradient(to right, var(--red-bg) 0%, var(--card) 6%);
+}
+
+tbody tr.row-yellow,
+tbody tr.row-warning {
+    background: linear-gradient(to right, var(--yellow-bg) 0%, var(--card) 6%);
+}
+
+tbody tr.row-red:hover,
+tbody tr.row-danger:hover,
+tbody tr.red:hover {
+    background: linear-gradient(to right, #fee2e2 0%, var(--bg) 6%);
+}
+
+tbody tr.row-yellow:hover,
+tbody tr.row-warning:hover,
+tbody tr.yellow:hover {
+    background: linear-gradient(to right, #fef3c7 0%, var(--bg) 6%);
+}
+
+tbody tr.red {
+    background: linear-gradient(to right, var(--red-bg) 0%, var(--card) 6%);
+}
+
+tbody tr.yellow {
+    background: linear-gradient(to right, var(--yellow-bg) 0%, var(--card) 6%);
+}
+
+td {
+    padding: 0.6rem 0.75rem;
+    white-space: nowrap;
+    color: var(--text);
+}
+
+.order-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--blue);
+}
+
+.order-id a {
+    color: var(--blue);
+    text-decoration: none;
+}
+
+.order-id a:hover {
+    text-decoration: underline;
+}
+
+.date {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-2);
+    font-size: 0.8rem;
+}
+
+/* ==================== Expand Button（展開按鈕，參考 v10.html）==================== */
+.expand-cell {
+    width: 30px;
+    text-align: center;
+}
+
+.expand-btn {
+    color: var(--text-3);
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    user-select: none;
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+}
+
+.expand-btn:hover {
+    color: var(--blue);
+    transform: scale(1.2);
+}
+
+.expand-btn.expanded {
+    transform: rotate(90deg);
+    color: var(--blue);
+}
+
+/* ==================== Light Indicator（燈號指示器）==================== */
+.light {
+    font-size: 1.3rem;
+    width: 40px;
+    text-align: center;
+}
+
+/* ==================== Order Info（訂單信息）==================== */
+.order-date {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-2);
+    font-size: 0.8rem;
+}
+
+.order-no {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--blue);
+}
+
+.order-no a {
+    color: var(--blue);
+    text-decoration: none;
+}
+
+.order-no a:hover {
+    text-decoration: underline;
+}
+
+.customer {
+    font-weight: 500;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ==================== Stage Info（階段信息）==================== */
+.stage-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stage-major {
+    font-size: 0.7rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.stage-current {
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* ==================== Days Indicator（天數指示器）==================== */
+.days {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.days.warning {
+    color: var(--yellow);
+}
+
+.days.danger {
+    color: var(--red);
+}
+
+/* 快速操作按鈕 */
+.actions-cell {
+    position: relative;
+}
+
+.actions-container {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.quick-actions {
+    display: none;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+tbody tr:hover .quick-actions {
+    display: flex;
+}
+
+.quick-btn {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+    font-weight: 500;
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.quick-btn-confirm {
+    background: var(--status-success);
+    color: white;
+    border-color: var(--status-success);
+}
+
+.quick-btn-confirm:hover {
+    background: #059669;
+    transform: translateY(-1px);
+}
+
+.quick-btn-revise {
+    background: var(--status-warning);
+    color: white;
+    border-color: var(--status-warning);
+}
+
+.quick-btn-revise:hover {
+    background: #d97706;
+    transform: translateY(-1px);
+}
+
+.quick-btn-cancel {
+    background: var(--status-danger);
+    color: white;
+    border-color: var(--status-danger);
+}
+
+.quick-btn-cancel:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+}
+
+.quick-btn-detail {
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+}
+
+.quick-btn-detail:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* ==================== 表單 ==================== */
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-2);
+    font-size: 0.85rem;
+}
+
+.required {
+    color: var(--red);
+}
+
+.form-input, .form-textarea, .form-select {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.form-input:focus, .form-textarea:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.form-hint {
+    font-size: 0.75rem;
+    color: var(--text-3);
+    margin-top: 0.25rem;
+}
+
+.form-error {
+    font-size: 0.75rem;
+    color: var(--red);
+    display: none;
+    margin-top: 0.25rem;
+}
+
+.form-error.show {
+    display: block;
+}
+
+/* 客戶名稱自動完成 */
+.customer-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    margin-top: 0.25rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.customer-suggestion-item {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.2s;
+}
+
+.customer-suggestion-item:hover {
+    background: var(--bg-hover);
+}
+
+.customer-suggestion-item:last-child {
+    border-bottom: none;
+}
+
+/* ==================== 按鈕 ==================== */
+.btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-primary {
+    background: var(--accent-blue);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.btn-secondary {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+/* ==================== 對話框（參考 newpedido.html）==================== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.modal-overlay.show {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 居中窗口样式（新增訂單 Modal） */
+.modal-center {
+    max-width: 800px;
+    width: 90%;
+    max-height: 85vh;
+}
+
+.new-order-modal {
+    max-width: 800px;
+}
+
+/* 表單行（並排顯示，左右對稱） */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.form-row .form-group {
+    margin-bottom: 0;
+}
+
+/* 右側編號欄位（與左側等寬） */
+.form-group-right {
+    /* 使用grid自動處理，左右等寬 */
+}
+
+.modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.modal-close,
+.close-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg);
+    color: var(--text-3);
+    font-size: 1.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.modal-close:hover,
+.close-btn:hover {
+    background: var(--red);
+    color: white;
+}
+
+/* ==================== Progress Steps（進度步驟，參考 newpedido.html）==================== */
+.progress-steps {
+    display: flex;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.progress-step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.progress-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    width: 100%;
+    height: 2px;
+    background: var(--border);
+    z-index: 0;
+}
+
+.progress-step.active:not(:last-child)::after,
+.progress-step.completed:not(:last-child)::after {
+    background: var(--blue);
+}
+
+.step-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-3);
+    z-index: 1;
+    margin-bottom: 0.5rem;
+    transition: all 0.2s;
+}
+
+.progress-step.active .step-circle {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: white;
+}
+
+.progress-step.completed .step-circle {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+}
+
+.step-label {
+    font-size: 0.75rem;
+    color: var(--text-3);
+    text-align: center;
+}
+
+.progress-step.active .step-label {
+    color: var(--blue);
+    font-weight: 600;
+}
+
+/* ==================== Form Step（表單步驟）==================== */
+.form-step {
+    display: none;
+}
+
+.form-step.active {
+    display: block;
+    animation: fadeInStep 0.3s ease-out;
+}
+
+@keyframes fadeInStep {
+    from {
+        opacity: 0;
+        transform: translateX(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.step-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text);
+}
+
+/* ==================== Form Grid（表單網格）==================== */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.form-grid.single {
+    grid-template-columns: 1fr;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+/* ==================== Form Input Focus（參考 newpedido.html）==================== */
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.form-input.error,
+.form-select.error {
+    border-color: var(--red);
+}
+
+/* ==================== Radio Group（單選按鈕組）==================== */
+.radio-group {
+    display: flex;
+    gap: 1rem;
+}
+
+.radio-option {
+    flex: 1;
+    position: relative;
+}
+
+.radio-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+}
+
+.radio-label {
+    display: block;
+    padding: 0.75rem;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+}
+
+.radio-option input[type="radio"]:checked + .radio-label {
+    border-color: var(--blue);
+    background: rgba(37, 99, 235, 0.05);
+    color: var(--blue);
+    font-weight: 600;
+}
+
+.radio-label:hover {
+    border-color: var(--blue);
+}
+
+/* ==================== Checkbox Group（複選框組）==================== */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--bg);
+    border-radius: 6px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--blue);
+}
+
+.checkbox-label {
+    font-size: 0.9rem;
+    color: var(--text-2);
+    cursor: pointer;
+}
+
+/* ==================== Info Box（信息框）==================== */
+.info-box {
+    background: rgba(37, 99, 235, 0.05);
+    border-left: 3px solid var(--blue);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 1rem;
+}
+
+.info-box-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--blue);
+    margin-bottom: 0.5rem;
+}
+
+.info-box-content {
+    font-size: 0.8rem;
+    color: var(--text-2);
+    line-height: 1.6;
+}
+
+/* ==================== Order Summary（訂單摘要）==================== */
+.order-summary {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.summary-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+
+.summary-row:last-child {
+    border-bottom: none;
+}
+
+.summary-label {
+    color: var(--text-3);
+}
+
+.summary-value {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* ==================== Product Item（產品項目）==================== */
+.product-item {
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.product-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.product-item-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.remove-product-btn {
+    background: var(--red);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.remove-product-btn:hover {
+    background: #b91c1c;
+}
+
+.add-product-btn {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg);
+    border: 2px dashed var(--border);
+    border-radius: 6px;
+    color: var(--blue);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.add-product-btn:hover {
+    border-color: var(--blue);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.status-change {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    font-size: 1.1rem;
+}
+
+.status-arrow {
+    color: var(--text-muted);
+}
+
+.status-new {
+    color: var(--status-success);
+    font-weight: 700;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 2px solid var(--border);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+}
+
+.footer-left {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.footer-right {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.modal-btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.modal-btn.cancel {
+    background: var(--bg);
+    color: var(--text-2);
+    border: 2px solid var(--border);
+}
+
+.modal-btn.cancel:hover {
+    background: var(--border);
+}
+
+.modal-btn.prev {
+    background: var(--bg);
+    color: var(--text-2);
+    border: 2px solid var(--border);
+}
+
+.modal-btn.prev:hover {
+    background: var(--border);
+}
+
+.modal-btn.next,
+.modal-btn.submit {
+    background: var(--blue);
+    color: white;
+}
+
+.modal-btn.next:hover,
+.modal-btn.submit:hover {
+    background: #1d4ed8;
+}
+
+.modal-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.date-today-btn {
+    margin-left: 0.5rem;
+    padding: 0.5rem 0.8rem;
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.date-today-btn:hover {
+    background: var(--accent-blue);
+    color: white;
+    border-color: var(--accent-blue);
+}
+
+/* ==================== 訂單操作選單（Details Menu / v10 樣式）==================== */
+.menu-option {
+    padding: 0.875rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+}
+
+.menu-option:hover {
+    background: var(--bg);
+}
+
+.menu-option.danger:hover {
+    background: var(--red-bg);
+    color: var(--red);
+}
+
+.menu-icon {
+    font-size: 1.5rem;
+    width: 32px;
+    text-align: center;
+}
+
+.menu-text {
+    flex: 1;
+}
+
+.menu-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.menu-desc {
+    font-size: 0.8rem;
+    color: var(--text-3);
+    margin-top: 0.125rem;
+}
+
+/* ==================== 通用 Modal 內容樣式（備註 / 日期等，參考 v10）==================== */
+.modal-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg);
+    border-radius: 6px;
+    margin-bottom: 1.25rem;
+    font-size: 0.9rem;
+    color: var(--text-2);
+}
+
+.modal-info-text strong {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.modal-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-2);
+    margin-bottom: 0.5rem;
+}
+
+.modal-textarea {
+    width: 100%;
+    min-height: 90px;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    resize: vertical;
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+
+.modal-textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.modal-hint {
+    font-size: 0.8rem;
+    color: var(--text-3);
+    margin-top: 0.5rem;
+}
+
+/* ==================== Back Step Options（退回步驟選項）==================== */
+.back-step-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.back-step-option:hover {
+    border-color: var(--blue);
+    background: var(--bg);
+}
+
+.back-step-option:has(input:checked) {
+    border-color: var(--blue);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.back-step-option input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--blue);
+}
+
+.back-step-info {
+    flex: 1;
+}
+
+.back-step-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.back-step-desc {
+    font-size: 0.75rem;
+    color: var(--text-3);
+    margin-top: 0.125rem;
+}
+
+/* ==================== Toast提示 ==================== */
+.toast {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--status-success);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1001;
+    animation: slideIn 0.3s ease-out;
+    min-width: 300px;
+}
+
+.toast.show {
+    display: flex;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.toast-content {
+    flex: 1;
+}
+
+.toast-title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.toast-message {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* ==================== 滾動條 ==================== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* ==================== 響應式 ==================== */
+@media (max-width: 768px) {
+    .nav-menu {
+        display: none;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-box {
+        max-width: 100%;
+    }
+}
+

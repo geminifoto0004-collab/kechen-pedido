@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}訂單詳情 - {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <div class="page-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>訂單詳情 #{{ order.order_number }}</h1>
+                <p class="page-subtitle">{{ order.customer_name }}</p>
+            </div>
+            {% if session.get('role') == 'admin' %}
+            <a href="{{ url_for('tracking_bp.order_edit', order_number=order.order_number) }}" class="btn btn-primary">編輯</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 基本信息 -->
+    <div class="section">
+        <h2>基本信息</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">訂單號</div>
+                <div class="info-value">{{ order.order_number }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">客戶名稱</div>
+                <div class="info-value">{{ order.customer_name }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">訂單日期</div>
+                <div class="info-value">{{ order.order_date }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">當前狀態</div>
+                <div class="info-value status-badge status-{{ order.current_status }}">
+                    <span class="light-emoji">
+                        {% if order.status_light == 'red' %}🔴
+                        {% elif order.status_light == 'yellow' %}🟡
+                        {% else %}🟢{% endif %}
+                    </span>
+                    {{ order.current_status }}
+                </div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">等待天數</div>
+                <div class="info-value">{{ order.status_days }} 天</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">生產類型</div>
+                <div class="info-value">{{ order.production_type or '-' }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">預計交貨</div>
+                <div class="info-value">{{ order.expected_delivery_date or '-' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 狀態歷史 -->
+    <div class="section">
+        <h2>狀態歷史</h2>
+        {% if history %}
+        <div class="timeline">
+            {% for item in history %}
+            <div class="timeline-item">
+                <div class="timeline-marker"></div>
+                <div class="timeline-content">
+                    <div class="timeline-header">
+                        <span class="timeline-status">{{ item.to_status }}</span>
+                        <span class="timeline-date">{{ item.action_date }}</span>
+                    </div>
+                    {% if item.notes %}
+                    <div class="timeline-notes">{{ item.notes }}</div>
+                    {% endif %}
+                    {% if item.operator %}
+                    <div class="timeline-operator">操作人：{{ item.operator }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">暫無歷史記錄</div>
+        {% endif %}
+    </div>
+
+    <!-- 備註 -->
+    <div class="section">
+        <h2>備註</h2>
+        {% if notes %}
+        <div class="notes-list">
+            {% for note in notes %}
+            <div class="note-item">
+                <div class="note-content">{{ note.content }}</div>
+                <div class="note-meta">
+                    <span>{{ note.created_by or '系統' }}</span>
+                    <span>{{ note.created_at }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">暫無備註</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.info-label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.info-value {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 2rem;
+    border-left: 2px solid var(--border-color);
+    padding-left: 2rem;
+}
+
+.timeline-item:last-child {
+    border-left: none;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -6px;
+    top: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    border: 2px solid var(--bg-secondary);
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.timeline-status {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.timeline-date {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.timeline-notes {
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.timeline-operator {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.note-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.note-content {
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+}
+
+.note-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+</style>
+{% endblock %}
+

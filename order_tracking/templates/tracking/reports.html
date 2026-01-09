@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}統計報表{% endblock %}
+
+{% block content %}
+<div class="reports-page">
+    <div class="page-header">
+        <h1>📊 統計報表</h1>
+    </div>
+
+    <div class="section">
+        <h2>客戶報表</h2>
+        <form method="GET" style="margin-bottom: 2rem;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">選擇客戶</label>
+                    <select name="customer" class="form-select" onchange="this.form.submit()">
+                        <option value="">請選擇客戶...</option>
+                        {% for c in customers %}
+                        <option value="{{ c }}" {% if customer == c %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </form>
+
+        {% if customer and orders %}
+        <div style="margin-top: 2rem;">
+            <h3>{{ customer }} 的訂單統計</h3>
+            <div class="table-container" style="max-height: 600px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>訂單號</th>
+                            <th>訂單日期</th>
+                            <th>狀態</th>
+                            <th>生產類型</th>
+                            <th>預計交貨</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr>
+                            <td class="order-id">
+                                <a href="{{ url_for('tracking_bp.order_detail', order_number=order.order_number) }}">
+                                    #{{ order.order_number }}
+                                </a>
+                            </td>
+                            <td class="date">{{ order.order_date }}</td>
+                            <td>
+                                <span class="status-badge">{{ order.current_status }}</span>
+                                <span class="light-emoji">
+                                    {% if order.status_light == 'red' %}🔴
+                                    {% elif order.status_light == 'yellow' %}🟡
+                                    {% else %}🟢{% endif %}
+                                </span>
+                            </td>
+                            <td>{{ order.production_type or '-' }}</td>
+                            <td class="date">{{ order.expected_delivery_date or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% elif customer %}
+        <div class="empty-state">
+            <p>該客戶暫無訂單</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

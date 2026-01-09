@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>訂單管理系統 - 完整快速更新</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+        
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-hover: #334155;
+            
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            
+            --status-danger: #ef4444;
+            --status-warning: #f59e0b;
+            --status-success: #10b981;
+            
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            
+            --border-color: #334155;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            overflow: hidden;
+        }
+        
+        /* 基礎組件省略... */
+        .toolbar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+        
+        .btn-primary {
+            background: var(--accent-blue);
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        /* 表格容器 */
+        .table-container {
+            height: calc(100vh - 80px);
+            overflow: auto;
+            padding: 2rem;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        
+        thead {
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary);
+            z-index: 10;
+        }
+        
+        th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border-color);
+            font-size: 0.85rem;
+        }
+        
+        tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+        
+        tbody tr:hover {
+            background: var(--bg-hover);
+        }
+        
+        tbody tr.row-danger {
+            background: rgba(239, 68, 68, 0.05);
+            border-left: 3px solid var(--status-danger);
+        }
+        
+        tbody tr.row-warning {
+            background: rgba(245, 158, 11, 0.05);
+            border-left: 3px solid var(--status-warning);
+        }
+        
+        td {
+            padding: 1rem;
+            color: var(--text-secondary);
+        }
+        
+        .order-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+        
+        .customer-name {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        
+        .light {
+            font-size: 14px;
+        }
+        
+        .date {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+        
+        /* 階段顯示 */
+        .stage-display {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .stage-current {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        .stage-next {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        
+        tbody tr:hover .stage-next {
+            color: var(--accent-cyan);
+        }
+        
+        /* 快速操作按鈕 */
+        .actions-cell {
+            position: relative;
+        }
+        
+        .actions-container {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .btn-update {
+            padding: 0.4rem 0.8rem;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .quick-actions {
+            display: none;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+        
+        tbody tr:hover .btn-update {
+            display: none;
+        }
+        
+        tbody tr:hover .quick-actions {
+            display: flex;
+        }
+        
+        .quick-btn {
+            padding: 0.4rem 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        
+        .quick-btn-confirm {
+            background: var(--status-success);
+            color: white;
+            border-color: var(--status-success);
+        }
+        
+        .quick-btn-confirm:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+        
+        .quick-btn-revise {
+            background: var(--status-warning);
+            color: white;
+            border-color: var(--status-warning);
+        }
+        
+        .quick-btn-revise:hover {
+            background: #d97706;
+        }
+        
+        .quick-btn-cancel {
+            background: var(--status-danger);
+            color: white;
+            border-color: var(--status-danger);
+        }
+        
+        .quick-btn-cancel:hover {
+            background: #dc2626;
+        }
+        
+        .quick-btn-detail {
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+        }
+        
+        .quick-btn-detail:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        /* 更新對話框 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-overlay.show {
+            display: flex;
+        }
+        
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.5rem;
+            padding: 0;
+        }
+        
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+        }
+        
+        .status-change {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            font-size: 1.1rem;
+        }
+        
+        .status-arrow {
+            color: var(--text-muted);
+        }
+        
+        .status-new {
+            color: var(--status-success);
+            font-weight: 700;
+        }
+        
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+        
+        .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            resize: vertical;
+            min-height: 80px;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+        
+        .form-hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+        
+        .date-today-btn {
+            margin-left: 0.5rem;
+            padding: 0.5rem 0.8rem;
+            background: var(--bg-hover);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .date-today-btn:hover {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+        
+        .modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+        
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--bg-primary);
+        }
+        
+        .btn-primary {
+            background: var(--accent-blue);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        /* Toast提示 */
+        .toast {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--status-success);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            z-index: 1001;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .toast.show {
+            display: flex;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .toast-content {
+            flex: 1;
+        }
+        
+        .toast-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        
+        .toast-message {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        /* 提示欄 */
+        .hint-bar {
+            background: rgba(59, 130, 246, 0.1);
+            border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+            padding: 0.8rem 2rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .hint-bar strong {
+            color: var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+    <!-- 頂部工具欄 -->
+    <div class="toolbar">
+        <div class="logo">📦 訂單管理系統 - 完整快速更新演示</div>
+        <button class="btn-primary">+ 新增訂單</button>
+    </div>
+
+    <!-- 提示欄 -->
+    <div class="hint-bar">
+        💡 <strong>快速更新：</strong>懸停在訂單行上，點擊快捷按鈕 · 
+        <strong>完整更新：</strong>按住 <strong>Shift</strong> + 點擊快捷按鈕可填寫日期和備註
+    </div>
+
+    <!-- 表格 -->
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>訂單號</th>
+                    <th>客戶</th>
+                    <th>當前階段</th>
+                    <th>狀態</th>
+                    <th>天數</th>
+                    <th>生產類型</th>
+                    <th>備註</th>
+                    <th style="width: 300px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 圖稿確認中 -->
+                <tr class="row-danger">
+                    <td class="order-id">#1007227</td>
+                    <td class="customer-name">OSCAR LLANO</td>
+                    <td>
+                        <div class="stage-display">
+                            <div class="stage-current">圖稿確認中</div>
+                            <div class="stage-next">→ 下一步：待打樣</div>
+                        </div>
+                    </td>
+                    <td><span class="light">🔴</span></td>
+                    <td class="date">8天</td>
+                    <td>科萊印花</td>
+                    <td>已報價</td>
+                    <td class="actions-cell">
+                        <div class="actions-container">
+                            <button class="btn-update">更新</button>
+                            <div class="quick-actions">
+                                <button class="quick-btn quick-btn-confirm" 
+                                        data-order="1007227" 
+                                        data-action="draft_confirm" 
+                                        data-current="圖稿確認中"
+                                        data-next="待打樣"
+                                        onclick="handleQuickUpdate(event, this)">
+                                    ✅ 已確認
+                                </button>
+                                <button class="quick-btn quick-btn-revise" 
+                                        data-order="1007227" 
+                                        data-action="draft_revise"
+                                        data-current="圖稿確認中"
+                                        data-next="圖稿修改中"
+                                        onclick="handleQuickUpdate(event, this)">
+                                    🔄 需修改
+                                </button>
+                                <button class="quick-btn quick-btn-cancel" 
+                                        data-order="1007227" 
+                                        data-action="cancel"
+                                        data-current="圖稿確認中"
+                                        data-next="已取消"
+                                        onclick="handleQuickUpdate(event, this)">
+                                    ❌ 取消
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- 打樣中 -->
+                <tr>
+                    <td class="order-id">#1007285</td>
+                    <td class="customer-name">OSCAR LLANO</td>
+                    <td>
+                        <div class="stage-display">
+                            <div class="stage-current">打樣中</div>
+                            <div class="stage-next">→ 下一步：打樣確認中</div>
+                        </div>
+                    </td>
+                    <td><span class="light">🟢</span></td>
+                    <td class="date">3天</td>
+                    <td>科萊印花</td>
+                    <td>描稿中</td>
+                    <td class="actions-cell">
+                        <div class="actions-container">
+                            <button class="btn-update">更新</button>
+                            <div class="quick-actions">
+                                <button class="quick-btn quick-btn-confirm" 
+                                        data-order="1007285" 
+                                        data-action="sample_done"
+                                        data-current="打樣中"
+                                        data-next="打樣確認中"
+                                        onclick="handleQuickUpdate(event, this)">
+                                    ✅ 打樣完成
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- 打樣確認中 -->
+                <tr class="row-danger">
+                    <td class="order-id">#1007283</td>
+                    <td class="customer-name">SERGIO CONDE</td>
+                    <td>
+                        <div class="stage-display">
+                            <div class="stage-current">打樣確認中</div>
+                            <div class="stage-next">→ 下一步：待生產</div>
+                        </div>
+                    </td>
+                    <td><span class="light">🔴</span></td>
+                    <td class="date">5天</td>
+                    <td>雪織印花</td>
+                    <td>-</td>
+                    <td class="actions-cell">
+                        <div class="actions-container">
+                            <button class="btn-update">更新</button>
+                            <div class="quick-actions">
+                                <button class="quick-btn quick-btn-confirm" 
+                                        data-order="1007283" 
+                                        data-action="sample_confirm"
+                                        data-current="打樣確認中"
+                                        data-next="待生產"
+                                        onclick="handleQuickUpdate(event, this)">
+                                    ✅ 已確認
+                                </button>
+                                <button class="quick-btn quick-btn-revise" 
+                                        data-order="1007283" 
+                                        data-action="sample_revise"
+                                        data-current="打樣確認中"
+                                        data-next="打樣修改中"
+                                        onclick="handleQuickUpdate(event, this)">
+                                    🔄 需重做
+                                </button>
+                                <button class="quick-btn quick-btn-cancel" 
+                                        data-order="1007283" 
+                                        data-action="cancel"
+                                        data-current="打樣確認中"
+                                        data-next="已取消"
+                                        onclick="handleQuickUpdate(event, this)">
+                                    ❌ 取消
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- 生產中 -->
+                <tr>
+                    <td class="order-id">#0251174</td>
+                    <td class="customer-name">SERGIO CONDE</td>
+                    <td>
+                        <div class="stage-display">
+                            <div class="stage-current">生產中</div>
+                            <div class="stage-next">→ 下一步：已完成</div>
+                        </div>
+                    </td>
+                    <td><span class="light">🟢</span></td>
+                    <td class="date">8天</td>
+                    <td>冰絲織對印花</td>
+                    <td>14000米</td>
+                    <td class="actions-cell">
+                        <div class="actions-container">
+                            <button class="btn-update">更新</button>
+                            <div class="quick-actions">
+                                <button class="quick-btn quick-btn-confirm" 
+                                        data-order="0251174" 
+                                        data-action="complete"
+                                        data-current="生產中"
+                                        data-next="已完成"
+                                        onclick="handleQuickUpdate(event, this)">
+                                    ✅ 生產完成
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 更新對話框 -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">快速更新訂單</div>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="status-change">
+                    <span id="currentStage">圖稿確認中</span>
+                    <span class="status-arrow">→</span>
+                    <span class="status-new" id="nextStage">待打樣</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">更新日期</label>
+                    <div style="display: flex; align-items: center;">
+                        <input type="date" class="form-input" id="updateDate">
+                        <button class="date-today-btn" onclick="setToday()">✓ 今天</button>
+                    </div>
+                    <div class="form-hint">記錄此操作的日期（例如：圖稿確認日期）</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">備註（可選）</label>
+                    <textarea class="form-textarea" id="updateNotes" placeholder="添加備註說明...例如：客戶很滿意，直接進入打樣"></textarea>
+                    <div class="form-hint">可以留空，系統會自動記錄狀態變更</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="confirmUpdate()">💾 確認更新</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast提示 -->
+    <div class="toast" id="toast">
+        <div style="font-size: 1.5rem;">✅</div>
+        <div class="toast-content">
+            <div class="toast-title" id="toastTitle">更新成功</div>
+            <div class="toast-message" id="toastMessage">訂單已更新</div>
+        </div>
+    </div>
+
+    <script>
+        let currentUpdateData = {};
+
+        // 獲取今天日期
+        function getTodayDate() {
+            const today = new Date();
+            return today.toISOString().split('T')[0];
+        }
+
+        // 設置為今天
+        function setToday() {
+            document.getElementById('updateDate').value = getTodayDate();
+        }
+
+        // 處理快速更新
+        function handleQuickUpdate(event, button) {
+            const orderId = button.dataset.order;
+            const action = button.dataset.action;
+            const current = button.dataset.current;
+            const next = button.dataset.next;
+
+            currentUpdateData = { orderId, action, current, next };
+
+            // 如果按住Shift，顯示對話框
+            if (event.shiftKey) {
+                showModal(orderId, current, next);
+            } else {
+                // 直接快速更新
+                performQuickUpdate(orderId, action, current, next, getTodayDate(), '');
+            }
+        }
+
+        // 顯示對話框
+        function showModal(orderId, current, next) {
+            document.getElementById('modalTitle').textContent = `快速更新 #${orderId}`;
+            document.getElementById('currentStage').textContent = current;
+            document.getElementById('nextStage').textContent = next;
+            document.getElementById('updateDate').value = getTodayDate();
+            document.getElementById('updateNotes').value = '';
+            document.getElementById('modalOverlay').classList.add('show');
+        }
+
+        // 關閉對話框
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('show');
+        }
+
+        // 確認更新（從對話框）
+        function confirmUpdate() {
+            const date = document.getElementById('updateDate').value;
+            const notes = document.getElementById('updateNotes').value;
+            
+            performQuickUpdate(
+                currentUpdateData.orderId,
+                currentUpdateData.action,
+                currentUpdateData.current,
+                currentUpdateData.next,
+                date,
+                notes
+            );
+            
+            closeModal();
+        }
+
+        // 執行快速更新
+        function performQuickUpdate(orderId, action, current, next, date, notes) {
+            // 這裡發送AJAX請求到後端
+            console.log('更新訂單:', {
+                orderId,
+                action,
+                current,
+                next,
+                date,
+                notes
+            });
+
+            // 顯示成功提示
+            let message = `訂單 #${orderId} · ${current} → ${next}`;
+            if (notes) {
+                message += ` · ${notes}`;
+            }
+            message += ` · ${date}`;
+            
+            showToast('✅ 更新成功', message);
+
+            // 實際應用中這裡會刷新表格
+        }
+
+        // 顯示Toast
+        function showToast(title, message) {
+            document.getElementById('toastTitle').textContent = title;
+            document.getElementById('toastMessage').textContent = message;
+            
+            const toast = document.getElementById('toast');
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+
+        // 點擊對話框外部關閉
+        document.getElementById('modalOverlay').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

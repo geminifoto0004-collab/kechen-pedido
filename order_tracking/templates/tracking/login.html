@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入 - 訂單流程追蹤系統</title>
+    <link rel="stylesheet" href="{{ url_for('tracking_bp.static', filename='tracking.css') }}">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-box">
+            <h1 class="login-title">📦 訂單流程追蹤系統</h1>
+            <p class="login-subtitle">請登入以繼續</p>
+            
+            {% if error %}
+            <div class="alert alert-error">{{ error }}</div>
+            {% endif %}
+            
+            <form method="POST" class="login-form">
+                <div class="form-group">
+                    <label class="form-label">用戶名</label>
+                    <input type="text" name="username" class="form-input" required autofocus>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">密碼</label>
+                    <input type="password" name="password" class="form-input" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">登入</button>
+            </form>
+            
+            <div class="login-hint">
+                <p>預設帳號：</p>
+                <ul>
+                    <li>管理員：admin / admin123</li>
+                    <li>查看者：viewer / viewer123</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

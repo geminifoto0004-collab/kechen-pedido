@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}訂單流程追蹤系統{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('tracking_bp.static', filename='tracking.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 頂部導航欄（參考 v10.html） -->
+    <div class="header">
+        <div class="header-content">
+            <div class="title">📦 訂單流程追蹤系統</div>
+            
+            <div class="nav-user">
+                <span class="user-name">👤 {{ session.get('display_name', '用戶') }}</span>
+                <a href="{{ url_for('tracking_bp.logout') }}" class="nav-link">登出</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-layout" id="appLayout">
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="摺疊 / 展開側邊欄">≡</button>
+        <!-- 左側邊欄 -->
+        <aside class="sidebar">
+            <div class="sidebar-menu">
+                <a href="{{ url_for('tracking_bp.index') }}" class="sidebar-item {% if request.endpoint == 'tracking_bp.index' %}active{% endif %}">
+                    <span class="sidebar-icon">🏠</span>
+                    <span class="sidebar-text">主頁</span>
+                </a>
+ 
+                <a href="{{ url_for('tracking_bp.reports') }}" class="sidebar-item {% if request.endpoint == 'tracking_bp.reports' %}active{% endif %}">
+                    <span class="sidebar-icon">📊</span>
+                    <span class="sidebar-text">報表</span>
+                </a>
+                {% if session.get('role') == 'admin' %}
+                <button class="sidebar-item sidebar-button" onclick="showNewOrderModal()">
+                    <span class="sidebar-icon">➕</span>
+                    <span class="sidebar-text">新增訂單/詢價</span>
+                </button>
+                {% endif %}
+            </div>
+        </aside>
+
+        <!-- 主內容區 -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="{{ url_for('tracking_bp.static', filename='tracking.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

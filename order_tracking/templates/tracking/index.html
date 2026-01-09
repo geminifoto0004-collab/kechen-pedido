@@ -1,0 +1,991 @@
+{% extends "base.html" %}
+
+{% block title %}訂單流程追蹤系統{% endblock %}
+
+{% block content %}
+
+{# ====== 根據後端資料先算好各類統計，方便套進 v10 版面 ====== #}
+{% set active_orders = all_orders
+    | rejectattr('current_status', 'in', ['已完成', '已取消'])
+    | list %}
+{% set completed_orders = all_orders
+    | selectattr('current_status', 'equalto', '已完成')
+    | list %}
+{% set cancelled_orders = all_orders
+    | selectattr('current_status', 'equalto', '已取消')
+    | list %}
+
+{% set draft_statuses = ['新訂單', '圖稿確認中', '圖稿修改中'] %}
+{% set sampling_statuses = ['待打樣', '打樣中', '打樣確認中', '打樣修改中'] %}
+{% set production_statuses = ['待生產', '生產中'] %}
+
+{% set draft_orders = all_orders | selectattr('current_status', 'in', draft_statuses) | list %}
+{% set sampling_orders = all_orders | selectattr('current_status', 'in', sampling_statuses) | list %}
+{% set production_orders = all_orders | selectattr('current_status', 'in', production_statuses) | list %}
+{% set quote_orders = all_orders | selectattr('current_status', 'equalto', '詢價中') | list %}
+
+<div class="container">
+    <!-- ====== 統計區（版面同 v10） ====== -->
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-icon">📦</div>
+            <div>
+                <div class="stat-label">進行中</div>
+                <div class="stat-value" id="totalOrders">{{ active_orders|length }}</div>
+            </div>
+        </div>
+        
+        <div class="stat red">
+            <div class="stat-icon">🔴</div>
+            <div>
+                <div class="stat-label">逾期</div>
+                <div class="stat-value" id="redOrders">{{ light_stats.get('red', 0) }}</div>
+            </div>
+        </div>
+
+        <div class="stat yellow">
+            <div class="stat-icon">🟡</div>
+            <div>
+                <div class="stat-label">需注意</div>
+                <div class="stat-value" id="yellowOrders">{{ light_stats.get('yellow', 0) }}</div>
+            </div>
+        </div>
+        
+        <div class="stat green">
+            <div class="stat-icon">✅</div>
+            <div>
+                <div class="stat-label">正常（綠燈）</div>
+                <div class="stat-value" id="greenOrders">{{ light_stats.get('green', 0) }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ====== 流程階段篩選列（版面同 v10） ====== -->
+    <div class="stage-filters">
+        <button class="stage-btn active" onclick="filterByStageGroup('all', this)">
+            📋 全部
+            <span class="stage-count">{{ active_orders|length }}</span>
+        </button>
+        
+        <!-- 圖稿階段 -->
+        <div class="stage-filter">
+            <button class="stage-btn" onclick="toggleSubstatus('draft', this)">
+                📄 圖稿階段
+                <span class="stage-count" id="draftCount">{{ draft_orders|length }}</span>
+                <span style="font-size: 0.7rem;">▼</span>
+            </button>
+            <div class="substatus-dropdown" id="dropdown-draft">
+                <div class="substatus-label">圖稿小狀態</div>
+                <div class="substatus-option active" onclick="filterBySubstatus('draft', 'all', this)">
+                    <span>全部</span>
+                    <span class="count" id="draft-all-count">{{ draft_orders|length }}</span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('draft', '新訂單', this)">
+                    <span>新訂單</span>
+                    <span class="count" id="draft-new-count">
+                        {{ all_orders | selectattr('current_status','equalto','新訂單') | list | length }}
+                    </span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('draft', '圖稿確認中', this)">
+                    <span>圖稿確認中</span>
+                    <span class="count" id="draft-confirm-count">
+                        {{ all_orders | selectattr('current_status','equalto','圖稿確認中') | list | length }}
+                    </span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('draft', '圖稿修改中', this)">
+                    <span>圖稿修改中</span>
+                    <span class="count" id="draft-revise-count">
+                        {{ all_orders | selectattr('current_status','equalto','圖稿修改中') | list | length }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 打樣階段 -->
+        <div class="stage-filter">
+            <button class="stage-btn" onclick="toggleSubstatus('sampling', this)">
+                🧪 打樣階段
+                <span class="stage-count" id="samplingCount">{{ sampling_orders|length }}</span>
+                <span style="font-size: 0.7rem;">▼</span>
+            </button>
+            <div class="substatus-dropdown" id="dropdown-sampling">
+                <div class="substatus-label">打樣小狀態</div>
+                <div class="substatus-option active" onclick="filterBySubstatus('sampling', 'all', this)">
+                    <span>全部</span>
+                    <span class="count" id="sampling-all-count">{{ sampling_orders|length }}</span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('sampling', '待打樣', this)">
+                    <span>待打樣</span>
+                    <span class="count" id="sampling-pending-count">
+                        {{ all_orders | selectattr('current_status','equalto','待打樣') | list | length }}
+                    </span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('sampling', '打樣中', this)">
+                    <span>打樣中</span>
+                    <span class="count" id="sampling-making-count">
+                        {{ all_orders | selectattr('current_status','equalto','打樣中') | list | length }}
+                    </span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('sampling', '打樣確認中', this)">
+                    <span>打樣確認中</span>
+                    <span class="count" id="sampling-confirm-count">
+                        {{ all_orders | selectattr('current_status','equalto','打樣確認中') | list | length }}
+                    </span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('sampling', '打樣修改中', this)">
+                    <span>打樣修改中</span>
+                    <span class="count" id="sampling-revise-count">
+                        {{ all_orders | selectattr('current_status','equalto','打樣修改中') | list | length }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 生產階段 -->
+        <div class="stage-filter">
+            <button class="stage-btn" onclick="toggleSubstatus('production', this)">
+                🏭 生產階段
+                <span class="stage-count" id="productionCount">{{ production_orders|length }}</span>
+                <span style="font-size: 0.7rem;">▼</span>
+            </button>
+            <div class="substatus-dropdown" id="dropdown-production">
+                <div class="substatus-label">生產小狀態</div>
+                <div class="substatus-option active" onclick="filterBySubstatus('production', 'all', this)">
+                    <span>全部</span>
+                    <span class="count" id="production-all-count">{{ production_orders|length }}</span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('production', '待生產', this)">
+                    <span>待生產</span>
+                    <span class="count" id="production-pending-count">
+                        {{ all_orders | selectattr('current_status','equalto','待生產') | list | length }}
+                    </span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('production', '生產中', this)">
+                    <span>生產中</span>
+                    <span class="count" id="production-making-count">
+                        {{ all_orders | selectattr('current_status','equalto','生產中') | list | length }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 詢價 / 等國外確認 -->
+        <button class="stage-btn pending" onclick="filterByStageGroup('quote', this)">
+            ⏳ 等國外確認 / 詢價
+            <span class="stage-count" id="quoteCount">{{ quote_orders|length }}</span>
+        </button>
+        
+        <!-- Divider -->
+        <div style="width: 1px; height: 30px; background: var(--border); margin: 0 0.5rem;"></div>
+        
+        <!-- 已完成 / 已取消 Checkbox -->
+        <label class="filter-checkbox">
+            <input type="checkbox" id="toggleCompleted" checked
+                   onchange="toggleCompletedOrders(this)">
+            <span>顯示已完成 (<span id="completedCount">{{ completed_orders|length }}</span>)</span>
+        </label>
+        
+        <label class="filter-checkbox">
+            <input type="checkbox" id="toggleCancelled"
+                   onchange="toggleCancelledOrders(this)">
+            <span>顯示已取消 (<span id="cancelledCount">{{ cancelled_orders|length }}</span>)</span>
+        </label>
+        
+        {% if session.get('role') == 'admin' %}
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem;">
+            <div class="search-box">
+                <span>🔍</span>
+                <input type="text" id="searchInput" placeholder="搜尋訂單號、客戶名稱..." value="">
+            </div>
+            <button class="btn btn-secondary" onclick="exportData()">📤 匯出</button>
+        </div>
+        {% else %}
+        <div style="margin-left: auto;">
+            <div class="search-box">
+                <span>🔍</span>
+                <input type="text" id="searchInput" placeholder="搜尋訂單號、客戶名稱..." value="">
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ====== 訂單表格（表頭風格同 v10；資料來自後端） ====== -->
+    <div class="table-wrapper">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                        <th>訂單日期</th>
+                        <th>訂單號</th>
+                        <th>客戶名稱</th>
+                        <th>產品編號</th>
+                        <th>數量</th>
+                        <th>生產工廠</th>
+                        <th>階段 / 狀態</th>
+                        <th>等待天數</th>
+                        <th>產品類型</th>
+                        <th>備註</th>
+                        {% if session.get('role') == 'admin' %}
+                        <th>操作</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody id="ordersTableBody">
+                    {% for order in all_orders %}
+                    <tr class="{{ order.status_light }}"
+                        onclick="toggleDetail('{{ order.order_number }}', event)"
+                        data-order-number="{{ order.order_number }}"
+                        data-customer-name="{{ order.customer_name }}"
+                        data-status="{{ order.current_status }}"
+                        data-light="{{ order.status_light }}"
+                        data-stage-group="{% if order.current_status in draft_statuses %}draft{% elif order.current_status in sampling_statuses %}sampling{% elif order.current_status in production_statuses %}production{% elif order.current_status == '詢價中' or order.order_number.startswith('REV-') %}quote{% elif order.current_status == '已完成' %}completed{% elif order.current_status == '已取消' %}cancelled{% else %}all{% endif %}">
+                        <td class="expand-cell">
+                            <span class="expand-btn" id="expand-{{ order.order_number }}">▶</span>
+                        </td>
+                        <td class="light">
+                            {% if order.status_light == 'red' %}
+                                🔴
+                            {% elif order.status_light == 'yellow' %}
+                                🟡
+                            {% elif order.current_status == '已取消' %}
+                                ⚫
+                            {% else %}
+                                🟢
+                            {% endif %}
+                        </td>
+                        <td class="order-date">{{ order.order_date }}</td>
+                        <td class="order-no">
+                            {% if order.order_number.startswith('REV-') %}
+                                🎨 {{ order.order_number }}
+                            {% else %}
+                                #{{ order.order_number }}
+                            {% endif %}
+                        </td>
+                        <td class="customer">{{ order.customer_name }}</td>
+                        <td>{{ order.product_code or '-' }}</td>
+                        <td>{{ order.quantity or '-' }}</td>
+                        <td>{{ order.production_type or '-' }}</td>
+                        <td>
+                            <div class="stage-info">
+                                <div class="stage-major">
+                                    {% if order.current_status in draft_statuses %}
+                                        📄 圖稿階段
+                                    {% elif order.current_status in sampling_statuses %}
+                                        🧪 打樣階段
+                                    {% elif order.current_status in production_statuses %}
+                                        🏭 生產階段
+                                    {% elif order.current_status == '已完成' %}
+                                        ✅ 已完成
+                                    {% elif order.current_status == '已取消' %}
+                                        ❌ 已取消
+                                    {% else %}
+                                        📋 其他
+                                    {% endif %}
+                                </div>
+                                <div class="stage-current">{{ order.current_status }}</div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="days
+                                {% if order.status_light == 'red' %} danger
+                                {% elif order.status_light == 'yellow' %} warning
+                                {% endif %}">
+                                {{ order.status_days }}天
+                            </span>
+                        </td>
+                        <td>{{ order.product_name or '-' }}</td>
+                        <td>{{ order.notes or '-' }}</td>
+
+                        {% if session.get('role') == 'admin' %}
+                        <td class="actions-cell">
+                            <div class="actions-container">
+                                <div class="quick-actions">
+                                    {% set current = order.current_status %}
+
+                                    {% if current == '詢價中' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="quote_complete"
+                                            data-current="詢價中"
+                                            data-next="已完成"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 完成
+                                    </button>
+                                    <button class="quick-btn quick-btn-cancel"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="cancel"
+                                            data-current="詢價中"
+                                            data-next="已取消"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ❌ 取消
+                                    </button>
+
+                                    {% elif current == '新訂單' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="draft_sent"
+                                            data-current="新訂單"
+                                            data-next="圖稿確認中"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 已發圖稿
+                                    </button>
+                                    <button class="quick-btn quick-btn-cancel"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="cancel"
+                                            data-current="新訂單"
+                                            data-next="已取消"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ❌ 取消
+                                    </button>
+
+                                    {% elif current == '圖稿確認中' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="draft_confirm"
+                                            data-current="圖稿確認中"
+                                            data-next="待打樣"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 已確認
+                                    </button>
+                                    <button class="quick-btn quick-btn-revise"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="draft_revise"
+                                            data-current="圖稿確認中"
+                                            data-next="圖稿修改中"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        🔄 需修改
+                                    </button>
+
+                                    {% elif current == '圖稿修改中' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="draft_modified"
+                                            data-current="圖稿修改中"
+                                            data-next="圖稿確認中"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 修改完成
+                                    </button>
+
+                                    {% elif current == '待打樣' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="sample_start"
+                                            data-current="待打樣"
+                                            data-next="打樣中"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 開始打樣
+                                    </button>
+
+                                    {% elif current == '打樣中' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="sample_done"
+                                            data-current="打樣中"
+                                            data-next="打樣確認中"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 打樣完成
+                                    </button>
+
+                                    {% elif current == '打樣確認中' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="sample_confirm"
+                                            data-current="打樣確認中"
+                                            data-next="待生產"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 已確認
+                                    </button>
+                                    <button class="quick-btn quick-btn-revise"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="sample_revise"
+                                            data-current="打樣確認中"
+                                            data-next="打樣修改中"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        🔄 需重做
+                                    </button>
+
+                                    {% elif current == '打樣修改中' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="sample_modified"
+                                            data-current="打樣修改中"
+                                            data-next="打樣確認中"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 重做完成
+                                    </button>
+
+                                    {% elif current == '待生產' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="production_start"
+                                            data-current="待生產"
+                                            data-next="生產中"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 開始生產
+                                    </button>
+
+                                    {% elif current == '生產中' %}
+                                    <button class="quick-btn quick-btn-confirm"
+                                            data-order="{{ order.order_number }}"
+                                            data-action="complete"
+                                            data-current="生產中"
+                                            data-next="已完成"
+                                            onclick="handleQuickUpdate(event, this)">
+                                        ✅ 生產完成
+                                    </button>
+                                    {% endif %}
+
+                                    <button type="button"
+                                            class="quick-btn quick-btn-detail"
+                                            onclick="showDetailsMenu('#{{ order.order_number }}')">
+                                        ⋯ 詳情
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="empty-state" id="emptyState"
+             style="display: none; padding: 3rem; text-align: center; color: var(--text-2);">
+            <p>📭 沒有找到符合條件的訂單</p>
+        </div>
+    </div>
+</div>
+
+<!-- ====== v10 的操作 / 詳情 / 備註 / 退回 / 取消 等 Modal（ID 保持與 tracking.js 一致） ====== -->
+
+<!-- Action Modal -->
+<div class="modal-overlay" id="actionModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title" id="modalTitle">確認操作</div>
+        </div>
+        <div class="modal-body">
+            <div class="modal-info">
+                <span class="modal-info-text" id="modalInfo">將訂單從 "當前狀態" 變更為 "下一狀態"</span>
+            </div>
+            
+            <div class="modal-label">📝 備註（可選）</div>
+            <textarea class="modal-textarea" id="modalNote" placeholder="記錄相關信息..."></textarea>
+            <div class="modal-hint">💡 可以記錄客戶要求、注意事項等</div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="closeModal()">取消</button>
+            <button class="modal-btn confirm" id="confirmBtn" onclick="confirmAction()">✓ 確認</button>
+        </div>
+    </div>
+</div>
+
+<!-- 訂單操作選單 Modal -->
+<div class="modal-overlay" id="detailsModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title">訂單操作選單</div>
+        </div>
+        <div class="modal-body">
+            <div class="menu-option" onclick="showNoteModal()">
+                <div class="menu-icon">📝</div>
+                <div class="menu-text">
+                    <div class="menu-label">添加備註</div>
+                    <div class="menu-desc">記錄相關信息</div>
+                </div>
+            </div>
+            
+            <div class="menu-option" onclick="showDeliveryDateModal()">
+                <div class="menu-icon">📅</div>
+                <div class="menu-text">
+                    <div class="menu-label">設定交貨日期</div>
+                    <div class="menu-desc">設定或修改預計交貨時間</div>
+                </div>
+            </div>
+            
+            <div class="menu-option" id="skipSamplingOption" style="display:none;" onclick="showSkipSamplingModal()">
+                <div class="menu-icon">⚡</div>
+                <div class="menu-text">
+                    <div class="menu-label">跳過打樣，直通生產</div>
+                    <div class="menu-desc">適合老客戶重複訂單</div>
+                </div>
+            </div>
+            
+            <div class="menu-option" onclick="showBackStepModal()">
+                <div class="menu-icon">🔄</div>
+                <div class="menu-text">
+                    <div class="menu-label">退回到之前步驟</div>
+                    <div class="menu-desc">選擇要退回的狀態</div>
+                </div>
+            </div>
+            
+            <div class="menu-option danger" onclick="showCancelOrderModal()">
+                <div class="menu-icon">❌</div>
+                <div class="menu-text">
+                    <div class="menu-label">取消訂單</div>
+                    <div class="menu-desc">終止此訂單</div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="closeModal()">關閉</button>
+        </div>
+    </div>
+</div>
+
+<!-- 退回步驟 Modal -->
+<div class="modal-overlay" id="backStepModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title">選擇要退回的步驟</div>
+        </div>
+        <div class="modal-body">
+            <div class="modal-info">
+                <span class="modal-info-text">當前狀態：<strong id="currentStatusText">樣品待確認</strong></span>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.8rem; color: var(--text-3); margin-bottom: 0.75rem;">選擇要退回到的步驟：</div>
+                
+                <label class="back-step-option">
+                    <input type="radio" name="backStep" value="打樣製作中">
+                    <div class="back-step-info">
+                        <div class="back-step-name">打樣製作中</div>
+                        <div class="back-step-desc">重新製作樣品</div>
+                    </div>
+                </label>
+                
+                <label class="back-step-option">
+                    <input type="radio" name="backStep" value="準備打樣">
+                    <div class="back-step-info">
+                        <div class="back-step-name">準備打樣</div>
+                        <div class="back-step-desc">重新準備打樣</div>
+                    </div>
+                </label>
+                
+                <label class="back-step-option">
+                    <input type="radio" name="backStep" value="圖稿待確認">
+                    <div class="back-step-info">
+                        <div class="back-step-name">圖稿待確認</div>
+                        <div class="back-step-desc">需要重新做圖</div>
+                    </div>
+                </label>
+            </div>
+            
+            <div class="modal-label">📝 退回原因（建議填寫）</div>
+            <textarea class="modal-textarea" id="backStepNote" placeholder="說明為什麼要退回..."></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="backToDetailsMenu()">← 返回</button>
+            <button class="modal-btn confirm" onclick="confirmBackStep()">✓ 確認退回</button>
+        </div>
+    </div>
+</div>
+
+<!-- 備註 Modal -->
+<div class="modal-overlay" id="noteModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title">添加備註</div>
+        </div>
+        <div class="modal-body">
+            <div class="modal-info">
+                <span class="modal-info-text">訂單 <strong id="noteOrderId">#-</strong></span>
+            </div>
+            
+            <div class="modal-label">📝 備註內容</div>
+            <textarea class="modal-textarea" id="noteText" placeholder="輸入備註信息..."></textarea>
+            <div class="modal-hint">💡 備註會顯示在時間軸上</div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="backToDetailsMenu()">← 返回</button>
+            <button class="modal-btn confirm" onclick="confirmAddNote()">✓ 添加</button>
+        </div>
+    </div>
+</div>
+
+<!-- 設定交貨日期 Modal -->
+<div class="modal-overlay" id="deliveryDateModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title">設定交貨日期</div>
+        </div>
+        <div class="modal-body">
+            <div class="modal-info">
+                <span class="modal-info-text">訂單 <strong id="deliveryOrderId">#-</strong></span>
+            </div>
+            
+            <div class="modal-label">📅 預計交貨日期</div>
+            <input type="date" class="modal-textarea" id="deliveryDate" style="min-height: auto; padding: 0.75rem;">
+            <div class="modal-hint">💡 可以隨時修改</div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="backToDetailsMenu()">← 返回</button>
+            <button class="modal-btn confirm" onclick="confirmDeliveryDate()">✓ 設定</button>
+        </div>
+    </div>
+</div>
+
+<!-- 跳過打樣 Modal -->
+<div class="modal-overlay" id="skipSamplingModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title">⚠️ 確認跳過打樣階段</div>
+        </div>
+        <div class="modal-body">
+            <div class="modal-info">
+                <div style="color: var(--text-2);">
+                    將直接從 <strong>圖稿待確認</strong> 進入
+                    <strong style="color: var(--blue);">準備生產</strong>
+                </div>
+            </div>
+            
+            <div class="modal-label">📝 跳過原因（可選）</div>
+            <textarea class="modal-textarea" id="skipReason" placeholder="例如：老客戶重複訂單..."></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="backToDetailsMenu()">← 返回</button>
+            <button class="modal-btn confirm" onclick="confirmSkipSampling()">✓ 確認跳過</button>
+        </div>
+    </div>
+</div>
+
+<!-- 取消訂單 Modal -->
+<div class="modal-overlay" id="cancelOrderModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title">⚠️ 確認取消訂單</div>
+        </div>
+        <div class="modal-body">
+            <div class="modal-info" style="background: var(--red-bg); border-left: 3px solid var(--red);">
+                <span style="color: var(--red); font-weight: 600;">此操作不可恢復！</span>
+            </div>
+            
+            <div class="modal-label">📝 取消原因（必填）</div>
+            <textarea class="modal-textarea" id="cancelReason" placeholder="請說明取消原因..." required></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="backToDetailsMenu()">← 返回</button>
+            <button class="modal-btn danger" onclick="confirmCancelOrder()">❌ 確認取消訂單</button>
+        </div>
+    </div>
+</div>
+
+<!-- ====== 新增訂單 / 快速更新 Modal：保留原有功能，與 v10 版面相容 ====== -->
+
+<!-- 新增訂單 Modal -->
+<div class="modal-overlay" id="newOrderModal">
+    <div class="modal modal-center new-order-modal">
+        <div class="modal-header">
+            <div class="modal-title">➕ 新增訂單/詢價</div>
+            <button class="modal-close" onclick="closeNewOrderModal()">✕</button>
+        </div>
+        
+        <div class="progress-steps">
+            <div class="progress-step active" data-step="1">
+                <div class="step-circle">1</div>
+                <div class="step-label">基本信息</div>
+            </div>
+            <div class="progress-step" data-step="2">
+                <div class="step-circle">2</div>
+                <div class="step-label">產品詳情</div>
+            </div>
+            <div class="progress-step" data-step="3">
+                <div class="step-circle">3</div>
+                <div class="step-label">生產設置</div>
+            </div>
+            <div class="progress-step" data-step="4">
+                <div class="step-circle">4</div>
+                <div class="step-label">確認提交</div>
+            </div>
+        </div>
+        
+        <div class="modal-body">
+            <form id="newOrderForm" onsubmit="event.preventDefault(); submitNewOrder();">
+                <!-- Step 1 -->
+                <div class="form-step active" data-step="1">
+                    <div class="step-title">📋 基本信息</div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">
+                                訂單日期 <span class="required">*</span>
+                            </label>
+                            <input type="date" name="order_date" id="newOrderDate" class="form-input" required>
+                            <span class="form-error">請選擇訂單日期</span>
+                        </div>
+
+                        <div class="form-group" style="position: relative;">
+                            <label class="form-label">
+                                訂單號
+                            </label>
+                            <input type="text" name="order_number" id="newOrderNumber" class="form-input"
+                                   placeholder="留空則創建詢價/修圖需求（自動生成YU編號）"
+                                   onblur="checkOrderNumber()">
+                            <span class="form-hint">💡 不填訂單號將創建詢價/修圖需求</span>
+                            <span id="orderNumberError" class="form-error" style="display: none;"></span>
+                        </div>
+                        
+                        <div class="form-group full-width" style="position: relative;">
+                            <label class="form-label">
+                                客戶名稱 <span class="required">*</span>
+                            </label>
+                            <input type="text" name="customer_name" id="newCustomerName" class="form-input" required
+                                   autocomplete="off"
+                                   oninput="searchCustomers(this.value)"
+                                   onfocus="searchCustomers(this.value)"
+                                   onblur="hideCustomerSuggestions()"
+                                   placeholder="輸入客戶名稱">
+                            <div id="customerSuggestions" class="customer-suggestions" style="display: none;"></div>
+                            <span class="form-error">客戶名稱不能為空</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="form-step" data-step="2">
+                    <div class="step-title">🎨 產品詳情</div>
+                    
+                    <div id="productList">
+                        <div class="product-item">
+                            <div class="product-item-header">
+                                <div class="product-item-title">產品 #1</div>
+                            </div>
+                            
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        產品類型 <span class="required">*</span>
+                                    </label>
+                                    <select name="product_type[]" class="form-select" required>
+                                        <option value="">請選擇</option>
+                                        <option value="數碼印花">數碼印花</option>
+                                        <option value="活性印花">活性印花</option>
+                                        <option value="冰絲印花">冰絲印花</option>
+                                        <option value="冰絲確剪碼印花">冰絲確剪碼印花</option>
+                                    </select>
+                                    <span class="form-error">請選擇產品類型</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        產品編號
+                                    </label>
+                                    <input type="text" name="product_code[]" class="form-input" placeholder="PRD-2026-XXX">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        數量
+                                    </label>
+                                    <input type="text" name="quantity[]" class="form-input" placeholder="例如：500 碼">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        單位
+                                    </label>
+                                    <select name="unit[]" class="form-select">
+                                        <option value="碼">碼</option>
+                                        <option value="米">米</option>
+                                        <option value="件">件</option>
+                                        <option value="打">打</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group full-width">
+                                    <label class="form-label">
+                                        產品備註
+                                    </label>
+                                    <textarea name="product_notes[]" class="form-textarea" placeholder="產品相關的特殊要求或備註"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="add-product-btn" onclick="addProduct()">
+                        ➕ 添加更多產品
+                    </button>
+                </div>
+                
+                <!-- Step 3 -->
+                <div class="form-step" data-step="3">
+                    <div class="step-title">🏭 生產設置</div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">
+                                生產工廠（生產類型）
+                            </label>
+                            <input type="text" name="production_type" id="newProductionType" class="form-input" placeholder="例如：廣州工廠">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                花型編號
+                            </label>
+                            <input type="text" name="pattern_code" id="newPatternCode" class="form-input" placeholder="花型編號">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                預計交貨日期
+                            </label>
+                            <input type="date" name="expected_delivery_date" id="newExpectedDeliveryDate" class="form-input">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                是否需要打樣？
+                            </label>
+                            <div class="radio-group">
+                                <div class="radio-option">
+                                    <input type="radio" name="needSampling" id="needSamplingYes" value="yes" checked>
+                                    <label for="needSamplingYes" class="radio-label">需要打樣</label>
+                                </div>
+                                <div class="radio-option">
+                                    <input type="radio" name="needSampling" id="needSamplingNo" value="no">
+                                    <label for="needSamplingNo" class="radio-label">直接生產</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label class="form-label">
+                                訂單備註
+                            </label>
+                            <textarea name="notes" id="newNotes" class="form-textarea"
+                                      placeholder="輸入訂單相關的特殊要求、注意事項等"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="info-box">
+                        <div class="info-box-title">💡 提示</div>
+                        <div class="info-box-content">
+                            • 選擇「直接生產」將跳過打樣階段<br>
+                            • 不填訂單號將創建詢價/修圖需求（自動生成YU編號）<br>
+                            • 預計交貨日期可以在後續調整
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 4 -->
+                <div class="form-step" data-step="4">
+                    <div class="step-title">✅ 確認訂單信息</div>
+                    
+                    <div class="order-summary">
+                        <div class="summary-title">📋 基本信息</div>
+                        <div class="summary-row">
+                            <span class="summary-label">訂單號</span>
+                            <span class="summary-value" id="summaryOrderNumber">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">訂單日期</span>
+                            <span class="summary-value" id="summaryOrderDate">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">客戶名稱</span>
+                            <span class="summary-value" id="summaryCustomer">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="order-summary" style="margin-top: 1rem;">
+                        <div class="summary-title">🎨 產品信息</div>
+                        <div id="summaryProducts">
+                            <!-- 動態生成產品摘要 -->
+                        </div>
+                    </div>
+                    
+                    <div class="order-summary" style="margin-top: 1rem;">
+                        <div class="summary-title">🏭 生產設置</div>
+                        <div class="summary-row">
+                            <span class="summary-label">生產工廠</span>
+                            <span class="summary-value" id="summaryProductionType">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">花型編號</span>
+                            <span class="summary-value" id="summaryPatternCode">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">預計交貨日期</span>
+                            <span class="summary-value" id="summaryDeliveryDate">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">是否打樣</span>
+                            <span class="summary-value" id="summarySampling">-</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">備註</span>
+                            <span class="summary-value" id="summaryNotes">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group" style="margin-top: 1rem;">
+                        <input type="checkbox" id="confirmCheck">
+                        <label for="confirmCheck" class="checkbox-label">
+                            我已確認以上信息無誤，可以提交訂單
+                        </label>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <div class="modal-footer">
+            <div class="footer-left">
+                <button type="button" class="modal-btn cancel" onclick="closeNewOrderModal()">取消</button>
+            </div>
+            <div class="footer-right">
+                <button type="button" class="modal-btn prev" id="prevBtn" onclick="prevStep()" style="display: none;">
+                    ← 上一步
+                </button>
+                <button type="button" class="modal-btn next" id="nextBtn" onclick="nextStep()">
+                    下一步 →
+                </button>
+                <button type="button" class="modal-btn submit" id="submitBtn" onclick="submitNewOrder()" style="display: none;">
+                    ✓ 提交訂單
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 快速更新對話框 -->
+<div class="modal-overlay" id="updateModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title" id="modalTitle">快速更新訂單</div>
+            <button class="modal-close" onclick="closeUpdateModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="status-change">
+                <span id="currentStage"></span>
+                <span class="status-arrow">→</span>
+                <span class="status-new" id="nextStage"></span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">更新日期</label>
+                <div style="display: flex; align-items: center;">
+                    <input type="date" class="form-input" id="updateDate">
+                    <button class="date-today-btn" onclick="setToday()">✓ 今天</button>
+                </div>
+                <div class="form-hint">記錄此操作的日期（例如：圖稿確認日期）</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">備註（可選）</label>
+                <textarea class="form-textarea" id="updateNotes" placeholder="添加備註說明...例如：客戶很滿意，直接進入打樣"></textarea>
+                <div class="form-hint">可以留空，系統會自動記錄狀態變更</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeUpdateModal()">取消</button>
+            <button class="btn btn-primary" onclick="confirmUpdate()">💾 確認更新</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}{% if order %}編輯訂單{% else %}新增訂單{% endif %}{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <div class="page-header">
+        <h1>{% if order %}編輯訂單{% else %}新增訂單{% endif %}</h1>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <div class="section">
+        <form method="POST" class="order-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">訂單號</label>
+                    <input type="text" name="order_number" class="form-input" 
+                           value="{{ order.order_number if order else '' }}" 
+                           {% if order %}readonly{% endif %}
+                           placeholder="留空則創建詢價/修圖需求（自動生成編號）">
+                    {% if order %}
+                        <div class="form-hint">訂單號不可修改</div>
+                    {% else %}
+                        <div class="form-hint">💡 不填訂單號將創建詢價/修圖需求（自動生成REV-日期-流水號）</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">客戶名稱 <span style="color: var(--status-danger);">*</span></label>
+                    <input type="text" name="customer_name" class="form-input" 
+                           value="{{ order.customer_name if order else '' }}" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">訂單日期 <span style="color: var(--status-danger);">*</span></label>
+                    <input type="date" name="order_date" class="form-input" 
+                           value="{{ order.order_date if order else '' }}" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">預計交貨日期</label>
+                    <input type="date" name="expected_delivery_date" class="form-input" 
+                           value="{{ order.expected_delivery_date if order else '' }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">生產類型</label>
+                    <input type="text" name="production_type" class="form-input" 
+                           value="{{ order.production_type if order else '' }}" 
+                           placeholder="例如：科萊印花、雪織印花">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">產品編號</label>
+                    <input type="text" name="product_code" class="form-input" 
+                           value="{{ order.product_code if order else '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">花型編號</label>
+                <input type="text" name="pattern_code" class="form-input" 
+                       value="{{ order.pattern_code if order else '' }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">備註</label>
+                <textarea name="notes" class="form-textarea" 
+                          placeholder="輸入備註信息...">{{ order.notes if order else '' }}</textarea>
+            </div>
+
+            <div class="form-actions">
+                <a href="{% if order %}{{ url_for('tracking_bp.order_detail', order_number=order.order_number) }}{% else %}{{ url_for('tracking_bp.orders') }}{% endif %}" 
+                   class="btn btn-secondary">取消</a>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.form-page {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.order-form {
+    max-width: 100%;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+}
+</style>
+{% endblock %}
+
