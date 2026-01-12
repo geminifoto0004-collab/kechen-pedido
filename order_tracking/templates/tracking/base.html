@@ -9,7 +9,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- 頂部導航欄（參考 v10.html） -->
+    <!-- 頂部導航欄 -->
     <div class="header">
         <div class="header-content">
             <div class="title">📦 訂單流程追蹤系統</div>
@@ -22,23 +22,36 @@
     </div>
 
     <div class="app-layout" id="appLayout">
-        <button class="sidebar-toggle" onclick="toggleSidebar()" title="摺疊 / 展開側邊欄">≡</button>
+        <button class="sidebar-toggle" 
+                onclick="toggleSidebar()" 
+                title="摺疊/展開側邊欄"
+                aria-label="切換側邊欄">
+            <span class="toggle-icon">☰</span>
+        </button>
+        
         <!-- 左側邊欄 -->
         <aside class="sidebar">
             <div class="sidebar-menu">
-                <a href="{{ url_for('tracking_bp.index') }}" class="sidebar-item {% if request.endpoint == 'tracking_bp.index' %}active{% endif %}">
+                <a href="{{ url_for('tracking_bp.index') }}" 
+                   class="sidebar-item {% if request.endpoint == 'tracking_bp.index' %}active{% endif %}"
+                   data-tooltip="主頁">
                     <span class="sidebar-icon">🏠</span>
                     <span class="sidebar-text">主頁</span>
                 </a>
  
-                <a href="{{ url_for('tracking_bp.reports') }}" class="sidebar-item {% if request.endpoint == 'tracking_bp.reports' %}active{% endif %}">
+                <a href="{{ url_for('tracking_bp.reports') }}" 
+                   class="sidebar-item {% if request.endpoint == 'tracking_bp.reports' %}active{% endif %}"
+                   data-tooltip="報表">
                     <span class="sidebar-icon">📊</span>
                     <span class="sidebar-text">報表</span>
                 </a>
+                
                 {% if session.get('role') == 'admin' %}
-                <button class="sidebar-item sidebar-button" onclick="showNewOrderModal()">
+                <button class="sidebar-item sidebar-button" 
+                        onclick="showNewOrderModal()"
+                        data-tooltip="新增訂單">
                     <span class="sidebar-icon">➕</span>
-                    <span class="sidebar-text">新增訂單/詢價</span>
+                    <span class="sidebar-text">新增訂單</span>
                 </button>
                 {% endif %}
             </div>
@@ -50,6 +63,246 @@
         </main>
     </div>
 
+    <!-- 共用：側邊抽屜覆蓋層 -->
+    <div class="drawer-overlay" id="detailDrawerOverlay" onclick="closeDetailDrawer()"></div>
+
+    <!-- 共用：侧边抽屉 -->
+    <div class="detail-drawer" id="detailDrawer">
+        <div class="drawer-header">
+            <div class="drawer-header-top">
+                <div class="drawer-title">📊 订单详细历史</div>
+                <button class="drawer-close" onclick="closeDetailDrawer()">✕</button>
+            </div>
+            <div class="drawer-order-info">
+                <div class="info-item">
+                    <span class="info-label">订单号</span>
+                    <span class="info-value" id="drawerOrderNumber">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">客户</span>
+                    <span class="info-value" id="drawerCustomerName">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">总耗时</span>
+                    <span class="info-value" id="drawerTotalDays" style="color: #ef4444;">计算中...</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="drawer-body">
+            <!-- 🎯 快速操作区 -->
+            <div class="drawer-actions-section" id="drawerQuickActions" style="display: none;">
+                <div class="actions-title">🎯 快速操作</div>
+                <div class="actions-grid" id="drawerActionsGrid">
+                    <!-- 由JavaScript动态生成 -->
+                </div>
+            </div>
+            
+            <!-- ⚙️ 订单管理区 -->
+            <div class="drawer-actions-section" id="drawerManagement" style="display: none;">
+                <div class="actions-title">⚙️ 订单管理</div>
+                <div class="actions-grid">
+                    <button class="drawer-action-btn btn-secondary" onclick="editOrderFromDrawer()">
+                        ✏️ 编辑订单
+                    </button>
+                    <button class="drawer-action-btn btn-danger" onclick="cancelOrderFromDrawer()">
+                        ❌ 取消订单
+                    </button>
+                </div>
+            </div>
+            
+            <div class="drawer-timeline-title">⏱️ 完整操作历史</div>
+            <div class="drawer-timeline" id="drawerTimeline">
+                <!-- 由JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 跳过阶段 Modal -->
+    <div class="modal-overlay" id="skipStageModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚡ 跳过当前阶段</h3>
+                <button class="modal-close" onclick="closeSkipStageModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">当前状态</label>
+                    <div id="skipCurrentStatus" style="font-weight: 600; color: var(--blue); font-size: 1.1rem; padding: 0.5rem 0;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">请选择要跳到的阶段 <span style="color: var(--status-danger);">*</span></label>
+                    <div id="skipStageOptions" class="skip-options-container">
+                        <!-- 动态生成 -->
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">备注（选填）</label>
+                    <textarea id="skipStageNotes" class="form-textarea" rows="3"
+                              placeholder="例如：客户要求加急，跳过打样直接生产"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeSkipStageModal()">取消</button>
+                <button class="btn btn-primary" onclick="confirmSkipStage()">确认跳过 ✅</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑/新增订单 Modal -->
+    <div class="modal-overlay" id="editOrderModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="editOrderModalTitle">✏️ 编辑订单</h3>
+                <button class="modal-close" onclick="closeEditOrderModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label class="form-label">订单号</label>
+                        <button type="button" id="toggleOrderNumberEdit" class="btn-link" style="display: none; font-size: 0.75rem; padding: 0.25rem 0.5rem; color: #3b82f6; cursor: pointer; background: none; border: none;" onclick="toggleOrderNumberEdit()">
+                            ✏️ 修改订单号
+                        </button>
+                    </div>
+                    <input type="text" id="editOrderNumber" class="form-input" placeholder="留空則創建詢價/修圖需求（自動生成編號）">
+                    <div class="form-hint" id="editOrderNumberHint" style="display: none; font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;"></div>
+                    <div class="form-hint" id="editOrderNumberWarning" style="display: none; font-size: 0.75rem; color: #f59e0b; margin-top: 0.25rem;">
+                        ⚠️ 修改订单号将同步更新所有相关记录
+                    </div>
+                    <div class="form-hint" id="editOrderNumberError" style="display: none; font-size: 0.75rem; color: #ef4444; margin-top: 0.25rem; font-weight: 500;"></div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">客户名称 <span style="color: var(--status-danger);">*</span></label>
+                        <input type="text" id="editCustomerName" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">订单日期 <span style="color: var(--status-danger);">*</span></label>
+                        <input type="date" id="editOrderDate" class="form-input" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">产品编号</label>
+                        <input type="text" id="editProductCode" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">数量</label>
+                        <input type="text" id="editQuantity" class="form-input">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">生产工厂</label>
+                        <input type="text" id="editFactory" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">预计交货日期</label>
+                        <input type="date" id="editExpectedDeliveryDate" class="form-input">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">生产类型</label>
+                    <input type="text" id="editProductionType" class="form-input">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">备注</label>
+                    <textarea id="editNotes" class="form-textarea" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeEditOrderModal()">取消</button>
+                <button class="btn btn-primary" onclick="confirmEditOrder()" id="editOrderSubmitBtn">保存修改 💾</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 取消订单 Modal -->
+    <div class="modal-overlay" id="cancelOrderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>❌ 取消订单</h3>
+                <button class="modal-close" onclick="closeCancelOrderModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">订单号</label>
+                    <div id="cancelOrderNumber" style="font-weight: 600; color: var(--text-1); font-size: 1.1rem; padding: 0.5rem 0;"></div>
+                </div>
+                
+                <div class="alert alert-warning" style="margin-bottom: 1rem; padding: 1rem; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0.5rem;">
+                    <strong>⚠️ 警告</strong><br>
+                    取消订单后无法恢复，请谨慎操作！
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">取消原因 <span style="color: var(--status-danger);">*</span></label>
+                    <textarea id="cancelReason" class="form-textarea" rows="4" 
+                              placeholder="请详细说明取消原因..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeCancelOrderModal()">返回</button>
+                <button class="btn btn-danger" onclick="confirmCancelOrder()">确认取消订单</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 共用：Toast提示 -->
+    <div class="toast" id="toast">
+        <div class="toast-icon">✅</div>
+        <div class="toast-content">
+            <div class="toast-title" id="toastTitle">操作成功</div>
+            <div class="toast-message" id="toastMessage">更新已保存</div>
+        </div>
+    </div>
+
+    <!-- 通用确认 Modal -->
+    <div class="modal-overlay" id="confirmModal" onclick="if(event.target === this) closeConfirmModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title" id="confirmModalTitle">确认操作</div>
+                <button class="modal-close" onclick="closeConfirmModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-info">
+                    <div id="confirmModalMessage" style="white-space: pre-line; line-height: 1.6;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn cancel" onclick="closeConfirmModal()">取消</button>
+                <button class="modal-btn confirm" id="confirmModalConfirmBtn">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通用提示 Modal -->
+    <div class="modal-overlay" id="alertModal" onclick="if(event.target === this) closeAlertModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title" id="alertModalTitle">提示</div>
+                <button class="modal-close" onclick="closeAlertModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-info">
+                    <div id="alertModalMessage" style="white-space: pre-line; line-height: 1.6;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn confirm" id="alertModalConfirmBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('tracking_bp.static', filename='STATUS_SYSTEM.js') }}"></script>
+    <script src="{{ url_for('tracking_bp.static', filename='new_order.js') }}"></script>
     <script src="{{ url_for('tracking_bp.static', filename='tracking.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>

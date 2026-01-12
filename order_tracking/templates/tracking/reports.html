@@ -1,21 +1,21 @@
 {% extends "base.html" %}
 
-{% block title %}統計報表{% endblock %}
+{% block title %}统计报表{% endblock %}
 
 {% block content %}
 <div class="reports-page">
     <div class="page-header">
-        <h1>📊 統計報表</h1>
+        <h1>📊 统计报表</h1>
     </div>
 
     <div class="section">
-        <h2>客戶報表</h2>
+        <h2>客户报表</h2>
         <form method="GET" style="margin-bottom: 2rem;">
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">選擇客戶</label>
+                    <label class="form-label">选择客户</label>
                     <select name="customer" class="form-select" onchange="this.form.submit()">
-                        <option value="">請選擇客戶...</option>
+                        <option value="">请选择客户...</option>
                         {% for c in customers %}
                         <option value="{{ c }}" {% if customer == c %}selected{% endif %}>{{ c }}</option>
                         {% endfor %}
@@ -26,16 +26,16 @@
 
         {% if customer and orders %}
         <div style="margin-top: 2rem;">
-            <h3>{{ customer }} 的訂單統計</h3>
+            <h3>{{ customer }} 的订单统计</h3>
             <div class="table-container" style="max-height: 600px;">
                 <table>
                     <thead>
                         <tr>
-                            <th>訂單號</th>
-                            <th>訂單日期</th>
-                            <th>狀態</th>
-                            <th>生產類型</th>
-                            <th>預計交貨</th>
+                            <th>订单号</th>
+                            <th>订单日期</th>
+                            <th>状态</th>
+                            <th>生产类型</th>
+                            <th>预计交貨</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -65,7 +65,7 @@
         </div>
         {% elif customer %}
         <div class="empty-state">
-            <p>該客戶暫無訂單</p>
+            <p>该客户暂无订单</p>
         </div>
         {% endif %}
     </div>

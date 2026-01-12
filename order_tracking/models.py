@@ -1,5 +1,5 @@
 """
-訂單流程追蹤系統 - 數據模型
+订单流程追踪系统 - 数据模型
 """
 import sqlite3
 import os
@@ -12,17 +12,24 @@ except ImportError:
         return f"hash_{password}"
 
 from .config import DATABASE_PATH, LIGHT_RULES
+from .status_config import STATUS
+
+# 数据库默认状态值（与 STATUS_SYSTEM.js 保持一致）
+DEFAULT_STATUS = STATUS['NEW_ORDER']
 
 def get_db():
-    """獲取數據庫連接"""
+    """获取数据库连接"""
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    """初始化數據庫"""
+    """初始化数据库"""
     conn = get_db()
     cursor = conn.cursor()
+    
+    # 使用 STATUS 配置中的默认状态（与 STATUS_SYSTEM.js 保持一致）
+    default_status = STATUS['NEW_ORDER']
     
     # 1. 用戶表
     cursor.execute('''
@@ -36,8 +43,8 @@ def init_db():
         )
     ''')
     
-    # 2. 訂單主表
-    cursor.execute('''
+    # 2. 訂單主表（使用 STATUS 配置中的默认状态）
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             order_number VARCHAR(50) UNIQUE NOT NULL,
@@ -47,7 +54,7 @@ def init_db():
             quantity VARCHAR(50),
             factory VARCHAR(100),
             order_date DATE NOT NULL,
-            current_status VARCHAR(50) NOT NULL DEFAULT '新訂單',
+            current_status VARCHAR(50) NOT NULL DEFAULT '{default_status}',
             status_light VARCHAR(10) NOT NULL DEFAULT 'green',
             status_days INTEGER DEFAULT 0,
             last_status_change_date DATE,
@@ -209,31 +216,31 @@ def init_db():
         viewer_hash = generate_password_hash('viewer123')
         cursor.execute('''
             INSERT OR IGNORE INTO users (username, password_hash, display_name, role)
-            VALUES ('admin', ?, '國內管理員', 'admin')
+            VALUES ('admin', ?, '国内管理员', 'admin')
         ''', (admin_hash,))
         cursor.execute('''
             INSERT OR IGNORE INTO users (username, password_hash, display_name, role)
-            VALUES ('viewer', ?, '國外查看', 'viewer')
+            VALUES ('viewer', ?, '国外查看', 'viewer')
         ''', (viewer_hash,))
     except:
         pass
     
-    # 初始化設定
+    # 初始化设定
     settings_data = [
-        ('draft_yellow_days', '3', '圖稿確認超過X天變黃色'),
-        ('draft_red_days', '5', '圖稿確認超過X天變紅色'),
-        ('sampling_yellow_days', '2', '打樣確認超過X天變黃色'),
-        ('sampling_red_days', '3', '打樣確認超過X天變紅色'),
-        ('new_order_yellow_days', '5', '新訂單超過X天未發圖變黃色'),
-        ('new_order_red_days', '7', '新訂單超過X天未發圖變紅色'),
-        ('ready_sample_yellow_days', '5', '待打樣超過X天變黃色'),
-        ('ready_sample_red_days', '7', '待打樣超過X天變紅色'),
-        ('sampling_process_yellow_days', '10', '打樣中超過X天變黃色'),
-        ('ready_production_yellow_days', '3', '待生產超過X天變黃色'),
-        ('ready_production_red_days', '5', '待生產超過X天變紅色'),
-        ('delivery_warning_days', '3', '距離交貨少於X天提醒'),
-        ('revision_yellow_days', '3', '修圖超過X天變黃色'),
-        ('revision_red_days', '5', '修圖超過X天變紅色')
+        ('draft_yellow_days', '3', '图稿确认超过X天变黄色'),
+        ('draft_red_days', '5', '图稿确认超过X天变红色'),
+        ('sampling_yellow_days', '2', '打样确认超过X天变黄色'),
+        ('sampling_red_days', '3', '打样确认超过X天变红色'),
+        ('new_order_yellow_days', '5', '新订单超过X天未发图变黄色'),
+        ('new_order_red_days', '7', '新订单超过X天未发图变红色'),
+        ('ready_sample_yellow_days', '5', '待打样超过X天变黄色'),
+        ('ready_sample_red_days', '7', '待打样超过X天变红色'),
+        ('sampling_process_yellow_days', '10', '打样中超过X天变黄色'),
+        ('ready_production_yellow_days', '3', '待生产超过X天变黄色'),
+        ('ready_production_red_days', '5', '待生产超过X天变红色'),
+        ('delivery_warning_days', '3', '距离交货少于X天提醒'),
+        ('revision_yellow_days', '3', '修图超过X天变黄色'),
+        ('revision_red_days', '5', '修图超过X天变红色')
     ]
     
     for key, value, desc in settings_data:
@@ -246,7 +253,7 @@ def init_db():
     conn.close()
 
 def calculate_status_light(order):
-    """計算訂單的燈號"""
+    """计算订单的灯号"""
     today = date.today()
     current_status = order['current_status']
     last_change = order['last_status_change_date']
@@ -269,52 +276,72 @@ def calculate_status_light(order):
         if (delivery - today).days <= LIGHT_RULES['delivery_warning_days']:
             return 'yellow'
     
-    # 根據狀態和等待天數判斷
-    if current_status == '新訂單':
+    # 根據狀態和等待天數判斷（使用 status_config.py 中定义的状态，与 STATUS_SYSTEM.js 保持一致）
+    if current_status == STATUS['NEW_ORDER']:
         rules = LIGHT_RULES['new_order']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == '詢價中':
-        # 詢價/修圖需求使用修圖規則
-        rules = LIGHT_RULES['revision']
+    elif current_status == STATUS['QUOTE_CONFIRMING']:
+        rules = LIGHT_RULES['draft_confirm']  # 报价待确认使用图稿确认规则
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == '圖稿確認中':
+    elif current_status == STATUS['DRAFT_CONFIRMING']:
         rules = LIGHT_RULES['draft_confirm']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == '待打樣':
+    elif current_status == STATUS['DRAFT_REVISING']:
+        rules = LIGHT_RULES['draft_confirm']  # 图稿修改中使用图稿确认规则
+        if days >= rules['red_days']:
+            return 'red'
+        elif days >= rules['yellow_days']:
+            return 'yellow'
+    
+    elif current_status == STATUS['PENDING_SAMPLE']:
         rules = LIGHT_RULES['ready_sample']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == '打樣中':
+    elif current_status == STATUS['SAMPLING']:
         rules = LIGHT_RULES['sampling_process']
         if rules['red_days'] and days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == '打樣確認中':
+    elif current_status == STATUS['SAMPLE_CONFIRMING']:
         rules = LIGHT_RULES['sampling_confirm']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == '待生產':
+    elif current_status == STATUS['SAMPLE_REVISING']:
+        rules = LIGHT_RULES['sampling_confirm']  # 打样修改中使用打样确认规则
+        if days >= rules['red_days']:
+            return 'red'
+        elif days >= rules['yellow_days']:
+            return 'yellow'
+    
+    elif current_status == STATUS['PENDING_PRODUCTION']:
         rules = LIGHT_RULES['ready_production']
+        if days >= rules['red_days']:
+            return 'red'
+        elif days >= rules['yellow_days']:
+            return 'yellow'
+    
+    elif current_status == STATUS['PRODUCING']:
+        rules = LIGHT_RULES['ready_production']  # 生产中待生产规则
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
@@ -322,8 +349,10 @@ def calculate_status_light(order):
     
     return 'green'
 
+
+
 def update_status_light(order_id, conn=None):
-    """更新訂單燈號"""
+    """更新订单灯号（修复版 - 兼容 sqlite3.Row）"""
     should_close = False
     if conn is None:
         conn = get_db()
@@ -336,20 +365,65 @@ def update_status_light(order_id, conn=None):
     
     if order:
         light = calculate_status_light(order)
+        
+        # 计算天数（修复：确保不是负数）
+        if order['last_status_change_date']:
+            try:
+                last_change = date.fromisoformat(order['last_status_change_date'])
+                today = date.today()
+                
+                # 修复1: 如果 last_change 是未来日期，修正为今天
+                if last_change > today:
+                    # 修复：使用 order['order_number'] 而不是 order.get()
+                    try:
+                        order_num = order['order_number']
+                    except (KeyError, IndexError):
+                        order_num = f"ID:{order_id}"
+                    
+                    print(f"⚠️  警告: 订单 {order_num} 的最后变更日期是未来 ({last_change})，已修正为今天")
+                    last_change = today
+                    # 同时更新数据库中的日期
+                    cursor.execute('''
+                        UPDATE orders 
+                        SET last_status_change_date = ?
+                        WHERE id = ?
+                    ''', (today.isoformat(), order_id))
+                
+                days = (today - last_change).days
+                
+                # 修复2: 双重保护 - 确保不是负数
+                days = max(0, days)
+                
+            except (ValueError, TypeError) as e:
+                try:
+                    order_num = order['order_number']
+                except (KeyError, IndexError):
+                    order_num = f"ID:{order_id}"
+                
+                print(f"❌ 错误: 订单 {order_num} 日期格式错误: {e}")
+                days = 0
+        else:
+            days = 0
+        
         cursor.execute('''
             UPDATE orders 
             SET status_light = ?, 
                 status_days = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        ''', (light, (date.today() - date.fromisoformat(order['last_status_change_date'])).days if order['last_status_change_date'] else 0, order_id))
+        ''', (light, days, order_id))
         conn.commit()
     
     if should_close:
         conn.close()
 
+
+
+
+
+
 def generate_revision_number():
-    """生成修圖編號"""
+    """生成修图编号"""
     today = datetime.now().strftime('%Y%m%d')
     conn = get_db()
     cursor = conn.cursor()

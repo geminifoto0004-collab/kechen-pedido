@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登入 - 訂單流程追蹤系統</title>
+    <title>登入 - 订单流程追踪系统</title>
     <link rel="stylesheet" href="{{ url_for('tracking_bp.static', filename='tracking.css') }}">
 </head>
 <body class="login-page">
     <div class="login-container">
         <div class="login-box">
-            <h1 class="login-title">📦 訂單流程追蹤系統</h1>
-            <p class="login-subtitle">請登入以繼續</p>
+            <h1 class="login-title">📦 订单流程追踪系统</h1>
+            <p class="login-subtitle">请登入以继续</p>
             
             {% if error %}
             <div class="alert alert-error">{{ error }}</div>
@@ -18,12 +18,12 @@
             
             <form method="POST" class="login-form">
                 <div class="form-group">
-                    <label class="form-label">用戶名</label>
+                    <label class="form-label">用户名</label>
                     <input type="text" name="username" class="form-input" required autofocus>
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">密碼</label>
+                    <label class="form-label">密码</label>
                     <input type="password" name="password" class="form-input" required>
                 </div>
                 
@@ -31,9 +31,9 @@
             </form>
             
             <div class="login-hint">
-                <p>預設帳號：</p>
+                <p>预设账号：</p>
                 <ul>
-                    <li>管理員：admin / admin123</li>
+                    <li>管理员：admin / admin123</li>
                     <li>查看者：viewer / viewer123</li>
                 </ul>
             </div>
