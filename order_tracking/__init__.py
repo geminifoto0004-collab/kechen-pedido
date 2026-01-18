@@ -3,6 +3,7 @@
 包含所有路由定義和業務邏輯
 """
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, g
+from werkzeug.exceptions import NotFound
 try:
     from werkzeug.security import check_password_hash
 except ImportError:
@@ -21,7 +22,24 @@ except ImportError:
 
 from .models import get_db, init_db, calculate_status_light, update_status_light, generate_revision_number
 from .config import SECRET_KEY, JWT_SECRET_KEY, JWT_EXPIRATION_DELTA, BLUEPRINT_NAME, URL_PREFIX
-from .status_config import STATUS, STAGE_GROUPS, STATUS_MAP, get_stage_group, get_statuses_by_stage_group
+from .status_config import STATUS, STAGE_GROUPS, STATUS_MAP, get_stage_group, get_statuses_by_stage_group  # 向后兼容
+from .status_definitions import STATUS_KEYS, QUICK_ACTIONS_MAP, get_status_label, STATUS_LABELS
+
+# ==================== 兼容性辅助函数 ====================
+def get_status_for_query(status_key):
+    """
+    获取用于数据库查询的状态值（兼容旧数据）
+    返回 (key, 简体中文) 的元组，用于 IN 查询
+    """
+    label_zh_cn = get_status_label(status_key, 'zh_cn')
+    return (status_key, label_zh_cn)
+
+def get_completed_cancelled_for_query():
+    """获取已完成和已取消的状态值（用于查询，兼容旧数据）"""
+    return (
+        (STATUS_KEYS['COMPLETED'], STATUS['COMPLETED']),
+        (STATUS_KEYS['CANCELLED'], STATUS['CANCELLED'])
+    )
 
 # 創建Blueprint
 tracking_bp = Blueprint(
@@ -118,59 +136,161 @@ def api_admin_required(f):
 
 @tracking_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    """登入頁面"""
+    """登入頁面 - 密碼驗證失敗時在當前頁面顯示錯誤，不跳轉"""
     if request.method == 'POST':
         data = request.get_json() if request.is_json else request.form
-        username = data.get('username')
-        password = data.get('password')
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
         
+        # 驗證輸入
+        if not username:
+            error_msg = '請輸入用戶名'
+            if request.is_json:
+                return jsonify({'success': False, 'error': error_msg, 'code': 'MISSING_USERNAME'}), 400
+            return render_template('login.html', error=error_msg, username=username)
+        
+        if not password:
+            error_msg = '請輸入密碼'
+            if request.is_json:
+                return jsonify({'success': False, 'error': error_msg, 'code': 'MISSING_PASSWORD'}), 400
+            return render_template('login.html', error=error_msg, username=username)
+        
+        # 從資料庫驗證用戶和密碼
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
         user = cursor.fetchone()
+        
+        # 驗證用戶是否存在和密碼是否正確
+        if not user:
+            conn.close()
+            error_msg = '用戶名或密碼錯誤'
+            if request.is_json:
+                return jsonify({'success': False, 'error': error_msg, 'code': 'INVALID_CREDENTIALS'}), 401
+            return render_template('login.html', error=error_msg, username=username)
+        
+        # 檢查用戶狀態
+        try:
+            user_status = user['status']
+        except (KeyError, IndexError):
+            user_status = 'active'  # 兼容旧数据
+        
+        if user_status == 'pending':
+            conn.close()
+            error_msg = '您的帳號正在等待主管審核，請稍後再試'
+            if request.is_json:
+                return jsonify({'success': False, 'error': error_msg, 'code': 'PENDING_APPROVAL'}), 403
+            return render_template('login.html', error=error_msg, username=username)
+        
+        if user_status == 'rejected':
+            conn.close()
+            error_msg = '您的註冊申請已被拒絕，請聯繫主管'
+            if request.is_json:
+                return jsonify({'success': False, 'error': error_msg, 'code': 'REJECTED'}), 403
+            return render_template('login.html', error=error_msg, username=username)
+
+        if user_status == 'suspended':
+            conn.close()
+            error_msg = '您的帳號已被停權，請聯繫主管'
+            if request.is_json:
+                return jsonify({'success': False, 'error': error_msg, 'code': 'SUSPENDED'}), 403
+            return render_template('login.html', error=error_msg, username=username)
+        
+        # 檢查是否需要重置密碼
+        try:
+            needs_reset = user['needs_password_reset']
+        except (KeyError, IndexError):
+            needs_reset = False
+        
+        # 如果需要重置密碼，檢查確認密碼
+        if needs_reset:
+            confirm_password = data.get('confirm_password', '')
+            if not confirm_password:
+                conn.close()
+                error_msg = '您的密碼已重置，請設置新密碼'
+                if request.is_json:
+                    return jsonify({
+                        'success': False, 
+                        'error': error_msg, 
+                        'code': 'NEEDS_PASSWORD_RESET',
+                        'needs_confirm': True
+                    }), 400
+                return render_template('login.html', error=error_msg, username=username, needs_password_reset=True)
+            
+            # 驗證新密碼和確認密碼
+            if password != confirm_password:
+                conn.close()
+                error_msg = '兩次輸入的密碼不一致'
+                if request.is_json:
+                    return jsonify({'success': False, 'error': error_msg}), 400
+                return render_template('login.html', error=error_msg, username=username, needs_password_reset=True)
+            
+            if len(password) < 6:
+                conn.close()
+                error_msg = '密碼至少需要6位'
+                if request.is_json:
+                    return jsonify({'success': False, 'error': error_msg}), 400
+                return render_template('login.html', error=error_msg, username=username, needs_password_reset=True)
+            
+            # 更新密碼並清除重置標記
+            from werkzeug.security import generate_password_hash
+            new_password_hash = generate_password_hash(password)
+            cursor.execute('''
+                UPDATE users 
+                SET password_hash = ?, needs_password_reset = 0 
+                WHERE id = ?
+            ''', (new_password_hash, user['id']))
+            conn.commit()
+        else:
+            # 正常登入，驗證密碼
+            if not check_password_hash(user['password_hash'], password):
+                conn.close()
+                error_msg = '用戶名或密碼錯誤'
+                if request.is_json:
+                    return jsonify({'success': False, 'error': error_msg, 'code': 'INVALID_CREDENTIALS'}), 401
+                return render_template('login.html', error=error_msg, username=username)
+        
         conn.close()
         
-        if user and check_password_hash(user['password_hash'], password):
-            if request.is_json:
-                # API登入，返回JWT Token
-                if not HAS_JWT:
-                    return jsonify({'success': False, 'error': 'JWT未安裝', 'code': 'JWT_NOT_AVAILABLE'}), 500
-                
-                token = jwt.encode({
-                    'user_id': user['id'],
-                    'username': user['username'],
-                    'role': user['role'],
-                    'exp': datetime.utcnow().timestamp() + JWT_EXPIRATION_DELTA
-                }, JWT_SECRET_KEY, algorithm='HS256')
-                
-                return jsonify({
-                    'success': True,
-                    'token': token,
-                    'user': {
-                        'id': user['id'],
-                        'username': user['username'],
-                        'display_name': user['display_name'],
-                        'role': user['role']
-                    },
-                    'expires_in': JWT_EXPIRATION_DELTA
-                })
-            else:
-                # 網頁登入，設置Session
-                session['user_id'] = user['id']
-                session['username'] = user['username']
-                session['display_name'] = user['display_name']
-                session['role'] = user['role']
-                return redirect(url_for('tracking_bp.index'))
-        
-        error_msg = '用戶名或密碼錯誤'
+        # 登入成功
         if request.is_json:
-            return jsonify({'success': False, 'error': error_msg, 'code': 'INVALID_CREDENTIALS'}), 401
-        return render_template('login.html', error=error_msg)
+            # API登入，返回JWT Token
+            if not HAS_JWT:
+                return jsonify({'success': False, 'error': 'JWT未安裝', 'code': 'JWT_NOT_AVAILABLE'}), 500
+            
+            token = jwt.encode({
+                'user_id': user['id'],
+                'username': user['username'],
+                'role': user['role'],
+                'exp': datetime.utcnow().timestamp() + JWT_EXPIRATION_DELTA
+            }, JWT_SECRET_KEY, algorithm='HS256')
+            
+            return jsonify({
+                'success': True,
+                'token': token,
+                'user': {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'display_name': user['display_name'],
+                    'role': user['role']
+                },
+                'expires_in': JWT_EXPIRATION_DELTA
+            })
+        else:
+            # 網頁登入，設置Session
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            session['display_name'] = user['display_name']
+            session['role'] = user['role']
+            return redirect(url_for('tracking_bp.index'))
     
     # GET請求 - 如果已登入，重定向到主頁
     if 'user_id' in session:
         return redirect(url_for('tracking_bp.index'))
-    return render_template('login.html')
+    
+    # 檢查是否有 needs_password_reset 參數
+    needs_reset = request.args.get('needs_password_reset', 'false') == 'true'
+    return render_template('login.html', needs_password_reset=needs_reset)
 
 @tracking_bp.route('/logout', methods=['GET', 'POST'])
 def logout():
@@ -180,6 +300,23 @@ def logout():
         return jsonify({'success': True, 'message': '已登出'})
     session.clear()
     return redirect(url_for('tracking_bp.login'))
+
+# ==================== 錯誤處理 ====================
+
+@tracking_bp.errorhandler(404)
+def handle_404(e):
+    """處理 404 錯誤 - 錯誤的 URL 跳轉回登入頁面或主頁"""
+    # 如果是 API 請求，返回 JSON 錯誤
+    if request.path.startswith('/tracking/api'):
+        return jsonify({'success': False, 'error': '路由不存在', 'code': 'NOT_FOUND'}), 404
+    
+    # 如果是網頁請求，根據登入狀態跳轉
+    if 'user_id' in session:
+        # 已登入，跳轉到主頁
+        return redirect(url_for('tracking_bp.index'))
+    else:
+        # 未登入，跳轉到登入頁面
+        return redirect(url_for('tracking_bp.login'))
 
 # ==================== 網頁路由 ====================
 
@@ -206,7 +343,7 @@ def index():
             SELECT action_date FROM status_history 
             WHERE order_number = ? AND to_status = ? 
             ORDER BY action_date ASC LIMIT 1
-        ''', (order_dict['order_number'], STATUS['DRAFT_CONFIRMING']))
+        ''', (order_dict['order_number'], STATUS_KEYS['DRAFT_CONFIRMING']))
         draft_row = cursor.fetchone()
         order_dict['draft_date'] = draft_row['action_date'] if draft_row else None
         orders_list[orders_list.index(order)] = order_dict
@@ -215,29 +352,47 @@ def index():
     cursor.execute('SELECT COUNT(*) as total FROM orders')
     total_orders = cursor.fetchone()['total']
     
-    # 燈號統計（用於統計卡片）
+    # 燈號統計（用於統計卡片）- 兼容旧数据（同时查询 key 和中文）
+    completed_key, completed_label = get_status_for_query(STATUS_KEYS['COMPLETED'])
+    cancelled_key, cancelled_label = get_status_for_query(STATUS_KEYS['CANCELLED'])
     cursor.execute('''
         SELECT status_light, COUNT(*) as count 
         FROM orders 
-        WHERE current_status NOT IN (?, ?)
+        WHERE current_status NOT IN (?, ?, ?, ?)
         GROUP BY status_light
-    ''', (STATUS['COMPLETED'], STATUS['CANCELLED']))
+    ''', (completed_key, completed_label, cancelled_key, cancelled_label))
     light_stats = {row['status_light']: row['count'] for row in cursor.fetchall()}
     
     conn.close()
     
-    # 定义各阶段的状态列表（简体）
-    # 统一使用 status_config.py 中定义的状态（与 STATUS_SYSTEM.js 保持一致）
-    new_and_quote_statuses = get_statuses_by_stage_group('new_and_quote')
-    draft_statuses = get_statuses_by_stage_group('draft')
-    sampling_statuses = get_statuses_by_stage_group('sampling')
-    production_statuses = get_statuses_by_stage_group('production')
-    quote_statuses = get_statuses_by_stage_group('quote')  # 等国外确认
+    # 定义各阶段的状态列表（兼容 key 和中文）
+    # 统一使用 status_definitions.py 中的状态定义
+    from .status_definitions import get_statuses_by_stage_group as get_status_keys_by_stage_group
     
-    # 计算等国外确认的订单数量
+    # 生成兼容列表：同时包含 key 和中文（用于模板查询）
+    def make_compatible_status_list(stage_group):
+        """生成兼容 key 和中文的状态列表"""
+        keys = get_status_keys_by_stage_group(stage_group)
+        labels = [get_status_label(key, 'zh_cn') for key in keys]
+        return keys + labels  # 同时包含 key 和中文
+    
+    new_and_quote_statuses = make_compatible_status_list('new_and_quote')
+    draft_statuses = make_compatible_status_list('draft')
+    sampling_statuses = make_compatible_status_list('sampling')
+    production_statuses = make_compatible_status_list('production')
+    
+    # 等国外确认（虚拟筛选器）
+    waiting_confirm_keys = ['QUOTE_CONFIRMING', 'DRAFT_CONFIRMING', 'SAMPLE_CONFIRMING']
+    waiting_confirm_labels = [get_status_label(k, 'zh_cn') for k in waiting_confirm_keys]
+    quote_statuses = waiting_confirm_keys + waiting_confirm_labels
+    
+    # 计算等国外确认的订单数量（兼容 key 和中文）
     quote_orders = [o for o in orders_list if o['current_status'] in quote_statuses]
     
     # 传递状态常量给模板
+    # STATUS: 向后兼容（key -> 简体中文）
+    # STATUS_KEYS: 新的 key 定义
+    # STATUS_LABELS: key -> 显示文字映射
     return render_template('index.html',
                          all_orders=orders_list,
                          total_orders=total_orders,
@@ -247,7 +402,9 @@ def index():
                          sampling_statuses=sampling_statuses,
                          production_statuses=production_statuses,
                          quote_orders=quote_orders,
-                         STATUS=STATUS)  # 传递 STATUS 常量给模板
+                         STATUS=STATUS,  # 向后兼容
+                         STATUS_KEYS=STATUS_KEYS,  # 新的 key 定义
+                         STATUS_LABELS=STATUS_LABELS)  # key -> 显示文字
 
 @tracking_bp.route('/orders')
 @login_required
@@ -326,8 +483,8 @@ def order_new():
                     next_num = 1
             else:
                 next_num = 1
-            order_number = f'YU{next_num:05d}'
-            initial_status = STATUS['NEW_ORDER']  # 使用统一配置（与 STATUS_SYSTEM.js 一致）
+            order_number = f'KC{next_num:05d}'
+            initial_status = STATUS_KEYS['NEW_ORDER']  # 使用 key（数据库存储）
         else:
             # 如果提供了訂單號，檢查是否已存在
             cursor.execute('SELECT id FROM orders WHERE order_number = ?', (order_number,))
@@ -337,7 +494,7 @@ def order_new():
                 if request.is_json:
                     return jsonify({'success': False, 'error': error, 'code': 'DUPLICATE_ORDER'}), 400
                 return render_template('order_form.html', error=error)
-            initial_status = STATUS['NEW_ORDER']  # 使用统一配置（与 STATUS_SYSTEM.js 一致）
+            initial_status = STATUS_KEYS['NEW_ORDER']  # 使用 key（数据库存储）
         
         # 插入订单
         order_date = data.get('order_date', date.today().isoformat())
@@ -431,33 +588,6 @@ def order_edit(order_number):
         return jsonify({'success': True, 'message': '訂單更新成功'})
     return redirect(url_for('tracking_bp.order_detail', order_number=order_number))
 
-@tracking_bp.route('/reports')
-@login_required
-def reports():
-    """統計報表"""
-    customer = request.args.get('customer', '')
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # 獲取所有客戶
-    cursor.execute('SELECT DISTINCT customer_name FROM orders ORDER BY customer_name')
-    customers = [row['customer_name'] for row in cursor.fetchall()]
-    
-    # 如果有選擇客戶，顯示該客戶的訂單
-    customer_orders = []
-    if customer:
-        cursor.execute('''
-            SELECT * FROM orders 
-            WHERE customer_name = ?
-            ORDER BY order_date DESC
-        ''', (customer,))
-        customer_orders = [dict(row) for row in cursor.fetchall()]
-    
-    conn.close()
-    
-    return render_template('reports.html', customers=customers, customer=customer, orders=customer_orders)
-
 # ==================== API路由 ====================
 
 @tracking_bp.route('/api/auth/me', methods=['GET'])
@@ -497,7 +627,10 @@ def api_orders():
     
     if tab == 'all':
         query += " AND current_status NOT IN (?, ?)"
-        params.extend([STATUS['COMPLETED'], STATUS['CANCELLED']])
+        # 兼容旧数据：同时查询 key 和中文
+        completed_key, completed_label = get_status_for_query(STATUS_KEYS['COMPLETED'])
+        cancelled_key, cancelled_label = get_status_for_query(STATUS_KEYS['CANCELLED'])
+        params.extend([completed_key, completed_label, cancelled_key, cancelled_label])
     elif tab == 'quote':
         # 等国外确认 - 筛选所有需要国外确认的状态
         quote_statuses = get_statuses_by_stage_group('quote')
@@ -616,8 +749,8 @@ def api_create_order():
                 next_num = 1
         else:
             next_num = 1
-        order_number = f'YU{next_num:05d}'
-        initial_status = STATUS['NEW_ORDER']  # 使用统一配置（与 STATUS_SYSTEM.js 一致）
+        order_number = f'KC{next_num:05d}'
+        initial_status = STATUS_KEYS['NEW_ORDER']  # 使用 key（数据库存储）
     else:
         # 如果提供了訂單號，檢查是否已存在
         cursor.execute('SELECT id FROM orders WHERE order_number = ?', (order_number,))
@@ -628,7 +761,7 @@ def api_create_order():
                 'error': '訂單號已存在',
                 'code': 'DUPLICATE_ORDER_NUMBER'
             }), 400
-        initial_status = STATUS['NEW_ORDER']  # 使用统一配置（与 STATUS_SYSTEM.js 一致）
+        initial_status = STATUS_KEYS['NEW_ORDER']  # 使用 key（数据库存储）
     
     # 插入訂單
     try:
@@ -714,26 +847,26 @@ def api_quick_update():
         if not order_number or not action:
             return jsonify({'success': False, 'error': '缺少必要參數'}), 400
         
-        # 状态映射（统一使用 status_config.py 中的 STATUS_MAP）
-        # 与 STATUS_SYSTEM.js 中的 QUICK_ACTIONS 保持一致
-        status_map = STATUS_MAP.copy()
+        # 状态映射（统一使用 status_definitions.py 中的 QUICK_ACTIONS_MAP）
+        # 返回的是 key，直接存入数据库
+        status_map = QUICK_ACTIONS_MAP.copy()
         
         # 兼容旧版本（保留，但建议逐步迁移）
         status_map.update({
-            'quote_to_order': STATUS['NEW_ORDER'],
-            'quote_complete': STATUS['COMPLETED'],
-            'draft_sent': STATUS['DRAFT_CONFIRMING'],
-            'draft_revise': STATUS['DRAFT_REVISING'],
-            'draft_modified': STATUS['DRAFT_CONFIRMING'],
-            'sample_start': STATUS['SAMPLING'],
-            'sample_done': STATUS['SAMPLE_CONFIRMING'],
-            'sample_confirm': STATUS['PENDING_PRODUCTION'],
-            'sample_revise': STATUS['SAMPLE_REVISING'],
-            'sample_modified': STATUS['SAMPLE_CONFIRMING'],
-            'complete': STATUS['COMPLETED']
+            'quote_to_order': STATUS_KEYS['NEW_ORDER'],
+            'quote_complete': STATUS_KEYS['COMPLETED'],
+            'draft_sent': STATUS_KEYS['DRAFT_CONFIRMING'],
+            'draft_revise': STATUS_KEYS['DRAFT_REVISING'],
+            'draft_modified': STATUS_KEYS['DRAFT_CONFIRMING'],
+            'sample_start': STATUS_KEYS['SAMPLING'],
+            'sample_done': STATUS_KEYS['SAMPLE_CONFIRMING'],
+            'sample_confirm': STATUS_KEYS['PENDING_PRODUCTION'],
+            'sample_revise': STATUS_KEYS['SAMPLE_REVISING'],
+            'sample_modified': STATUS_KEYS['SAMPLE_CONFIRMING'],
+            'complete': STATUS_KEYS['COMPLETED']
         })
         
-        new_status = status_map.get(action)
+        new_status = status_map.get(action)  # 返回 key
         if not new_status:
             return jsonify({'success': False, 'error': f'无效的操作：{action}'}), 400
         
@@ -1002,7 +1135,7 @@ def api_next_quote_number():
     else:
         next_num = 1
     
-    next_number = f'YU{next_num:05d}'
+    next_number = f'KC{next_num:05d}'
     conn.close()
     
     return jsonify({
@@ -1020,20 +1153,24 @@ def api_stats():
     cursor.execute('SELECT COUNT(*) as total FROM orders')
     total = cursor.fetchone()['total']
     
-    cursor.execute('SELECT COUNT(*) as count FROM orders WHERE current_status NOT IN (?, ?)', 
-                   (STATUS['COMPLETED'], STATUS['CANCELLED']))
+    # 兼容旧数据：同时查询 key 和中文
+    completed_key, completed_label = get_status_for_query(STATUS_KEYS['COMPLETED'])
+    cancelled_key, cancelled_label = get_status_for_query(STATUS_KEYS['CANCELLED'])
+    
+    cursor.execute('SELECT COUNT(*) as count FROM orders WHERE current_status NOT IN (?, ?, ?, ?)', 
+                   (completed_key, completed_label, cancelled_key, cancelled_label))
     active = cursor.fetchone()['count']
     
-    cursor.execute('SELECT COUNT(*) as count FROM orders WHERE status_light = "red" AND current_status NOT IN (?, ?)', 
-                   (STATUS['COMPLETED'], STATUS['CANCELLED']))
+    cursor.execute('SELECT COUNT(*) as count FROM orders WHERE status_light = "red" AND current_status NOT IN (?, ?, ?, ?)', 
+                   (completed_key, completed_label, cancelled_key, cancelled_label))
     red = cursor.fetchone()['count']
     
-    cursor.execute('SELECT COUNT(*) as count FROM orders WHERE status_light = "yellow" AND current_status NOT IN (?, ?)', 
-                   (STATUS['COMPLETED'], STATUS['CANCELLED']))
+    cursor.execute('SELECT COUNT(*) as count FROM orders WHERE status_light = "yellow" AND current_status NOT IN (?, ?, ?, ?)', 
+                   (completed_key, completed_label, cancelled_key, cancelled_label))
     yellow = cursor.fetchone()['count']
     
-    cursor.execute('SELECT COUNT(*) as count FROM orders WHERE status_light = "green" AND current_status NOT IN (?, ?)', 
-                   (STATUS['COMPLETED'], STATUS['CANCELLED']))
+    cursor.execute('SELECT COUNT(*) as count FROM orders WHERE status_light = "green" AND current_status NOT IN (?, ?, ?, ?)', 
+                   (completed_key, completed_label, cancelled_key, cancelled_label))
     green = cursor.fetchone()['count']
     
     conn.close()
@@ -1162,6 +1299,30 @@ def api_update_history(order_number, history_id):
         WHERE id = ?
     ''', (action_date, notes, history_id))
     
+    # 檢查這是否是最後一條歷史記錄（當前狀態）
+    cursor.execute('''
+        SELECT id FROM status_history 
+        WHERE order_number = ? 
+        ORDER BY action_date DESC, id DESC 
+        LIMIT 1
+    ''', (order_number,))
+    latest_history = cursor.fetchone()
+    
+    # 如果編輯的是最後一條歷史記錄，需要更新訂單的 last_status_change_date
+    if latest_history and latest_history['id'] == history_id:
+        cursor.execute('''
+            UPDATE orders 
+            SET last_status_change_date = ?
+            WHERE order_number = ?
+        ''', (action_date, order_number))
+        
+        # 重新計算燈號
+        cursor.execute('SELECT id FROM orders WHERE order_number = ?', (order_number,))
+        order = cursor.fetchone()
+        if order:
+            from .models import update_status_light
+            update_status_light(order['id'], conn)
+    
     # 記錄到操作日誌
     cursor.execute('''
         INSERT INTO audit_log (
@@ -1202,34 +1363,55 @@ def api_update_order(order_number):
             conn.close()
             return jsonify({'success': False, 'error': '訂單不存在'}), 404
         
-        # 更新訂單（支持所有欄位）
-        cursor.execute('''
-            UPDATE orders 
-            SET customer_name = ?, 
-                order_date = ?, 
-                product_name = ?,
-                product_code = ?, 
-                quantity = ?,
-                factory = ?,
-                production_type = ?, 
-                pattern_code = ?, 
-                expected_delivery_date = ?, 
-                notes = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE order_number = ?
-        ''', (
-            data.get('customer_name'),
-            data.get('order_date'),
-            data.get('product_name', data.get('product_code', '')),  # product_name 優先，否則用 product_code
-            data.get('product_code', ''),
-            data.get('quantity', ''),
-            data.get('factory', ''),
-            data.get('production_type', ''),
-            data.get('pattern_code', ''),
-            data.get('expected_delivery_date'),
-            data.get('notes', ''),
-            order_number
-        ))
+        order = dict(order)
+        
+        # 支持部分更新：只更新传入的字段，其他字段保持原值
+        update_fields = []
+        update_values = []
+        
+        if 'customer_name' in data:
+            update_fields.append('customer_name = ?')
+            update_values.append(data['customer_name'])
+        if 'order_date' in data:
+            update_fields.append('order_date = ?')
+            update_values.append(data['order_date'])
+        if 'product_name' in data:
+            update_fields.append('product_name = ?')
+            update_values.append(data['product_name'])
+        if 'product_code' in data:
+            update_fields.append('product_code = ?')
+            update_values.append(data['product_code'])
+        if 'quantity' in data:
+            update_fields.append('quantity = ?')
+            update_values.append(data['quantity'])
+        if 'factory' in data:
+            update_fields.append('factory = ?')
+            update_values.append(data['factory'])
+        if 'production_type' in data:
+            update_fields.append('production_type = ?')
+            update_values.append(data['production_type'])
+        if 'pattern_code' in data:
+            update_fields.append('pattern_code = ?')
+            update_values.append(data['pattern_code'])
+        if 'expected_delivery_date' in data:
+            update_fields.append('expected_delivery_date = ?')
+            update_values.append(data['expected_delivery_date'])
+        if 'notes' in data:
+            update_fields.append('notes = ?')
+            update_values.append(data['notes'])
+        
+        # 如果没有要更新的字段，返回错误
+        if not update_fields:
+            conn.close()
+            return jsonify({'success': False, 'error': '沒有提供要更新的字段'}), 400
+        
+        # 添加 updated_at
+        update_fields.append('updated_at = CURRENT_TIMESTAMP')
+        update_values.append(order_number)
+        
+        # 构建并执行更新语句
+        update_sql = f'UPDATE orders SET {", ".join(update_fields)} WHERE order_number = ?'
+        cursor.execute(update_sql, update_values)
         
         # 更新燈號
         update_status_light(order['id'], conn)
@@ -1531,6 +1713,439 @@ def api_global_search():
             'error': f'搜索失败：{str(e)}'
         }), 500
 
+
+# ==================== 新增：用戶管理 API（M1）====================
+
+@tracking_bp.route('/api/users', methods=['GET'])
+@admin_required
+def get_users_api():
+    """獲取所有用戶列表（主管專用）- 包括所有狀態"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    role = request.args.get('role')
+    search = request.args.get('search')
+    status_filter = request.args.get('status')
+    
+    # 查詢所有用戶（包括pending/rejected/active）
+    query = 'SELECT * FROM users WHERE 1=1'
+    params = []
+    
+    if role:
+        query += ' AND role = ?'
+        params.append(role)
+    
+    if status_filter:
+        query += ' AND status = ?'
+        params.append(status_filter)
+    
+    if search:
+        query += ' AND (username LIKE ? OR display_name LIKE ? OR real_name LIKE ?)'
+        params.extend([f'%{search}%'] * 3)
+    
+    query += ' ORDER BY created_at DESC'
+    
+    cursor.execute(query, params)
+    users = cursor.fetchall()
+    
+    result = []
+    for user in users:
+        # 統計該用戶負責的產品數
+        cursor.execute('SELECT COUNT(*) as count FROM products WHERE handler_id = ?', (user['id'],))
+        product_count = cursor.fetchone()['count']
+        
+        # 獲取real_name、employee_id和status
+        real_name = user['display_name']  # 默认值
+        try:
+            if user['real_name']:
+                real_name = user['real_name']
+        except (KeyError, IndexError):
+            pass
+        
+        try:
+            employee_id = user['employee_id']
+            if not employee_id:
+                # 如果沒有員工ID，生成一個（格式：EMP001）
+                employee_id = f"EMP{user['id']:03d}"
+        except (KeyError, IndexError):
+            employee_id = f"EMP{user['id']:03d}"
+        
+        try:
+            user_status = user['status']
+            if not user_status:
+                user_status = 'active'  # 兼容旧数据
+        except (KeyError, IndexError):
+            user_status = 'active'
+        
+        result.append({
+            'user_id': user['id'],
+            'employee_id': employee_id,
+            'username': user['username'],
+            'display_name': user['display_name'],
+            'real_name': real_name,
+            'role': user['role'],
+            'status': user_status,
+            'created_at': user['created_at'],
+            'product_count': product_count
+        })
+    
+    conn.close()
+    return jsonify({'success': True, 'data': result})
+
+
+@tracking_bp.route('/api/users', methods=['POST'])
+@admin_required
+def create_user_api():
+    """創建用戶（主管專用）"""
+    data = request.get_json()
+    
+    if not data.get('username') or not data.get('password'):
+        return jsonify({'success': False, 'error': '用戶名和密碼不能為空'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查用戶名是否已存在
+    cursor.execute('SELECT id FROM users WHERE username = ?', (data['username'],))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'error': '用戶名已存在'}), 400
+    
+    # 創建用戶
+    from werkzeug.security import generate_password_hash
+    password_hash = generate_password_hash(data['password'])
+    
+    cursor.execute('''
+        INSERT INTO users (username, password_hash, display_name, real_name, role)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (
+        data['username'],
+        password_hash,
+        data.get('display_name', data['username']),
+        data.get('real_name', data.get('display_name', data['username'])),
+        data.get('role', 'sales')
+    ))
+    
+    user_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'data': {
+            'user_id': user_id,
+            'username': data['username'],
+            'role': data.get('role', 'sales')
+        }
+    })
+
+
+@tracking_bp.route('/api/users/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_user_api(user_id):
+    """更新用戶資料（主管專用）"""
+    data = request.get_json()
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查用戶是否存在
+    cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'error': '用戶不存在'}), 404
+    
+    # 更新欄位
+    updates = []
+    params = []
+    
+    if 'display_name' in data:
+        updates.append('display_name = ?')
+        params.append(data['display_name'])
+    
+    if 'real_name' in data:
+        updates.append('real_name = ?')
+        params.append(data['real_name'])
+        # 同步更新 display_name
+        updates.append('display_name = ?')
+        params.append(data['real_name'])
+    
+    if 'role' in data:
+        if data['role'] not in ['admin', 'sales', 'viewer']:
+            conn.close()
+            return jsonify({'success': False, 'error': '無效的角色'}), 400
+        updates.append('role = ?')
+        params.append(data['role'])
+    
+    if 'status' in data:
+        if data['status'] not in ['pending', 'active', 'rejected']:
+            conn.close()
+            return jsonify({'success': False, 'error': '無效的狀態'}), 400
+        updates.append('status = ?')
+        params.append(data['status'])
+    
+    if updates:
+        query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
+        params.append(user_id)
+        cursor.execute(query, params)
+        conn.commit()
+    
+    conn.close()
+    return jsonify({'success': True, 'message': '用戶資料已更新'})
+
+
+@tracking_bp.route('/api/users/<int:user_id>/reset-password', methods=['POST'])
+@admin_required
+def reset_user_password_api(user_id):
+    """重設用戶密碼（主管專用）- 設置需要用戶確認密碼"""
+    data = request.get_json()
+    new_password = data.get('new_password')
+    
+    # 如果提供了新密碼，直接設置；否則設置為需要用戶確認
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    if new_password:
+        if len(new_password) < 6:
+            conn.close()
+            return jsonify({'success': False, 'error': '密碼至少6位'}), 400
+        
+        from werkzeug.security import generate_password_hash
+        password_hash = generate_password_hash(new_password)
+        cursor.execute('''
+            UPDATE users 
+            SET password_hash = ?, needs_password_reset = 0 
+            WHERE id = ?
+        ''', (password_hash, user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': '密碼已重設'})
+    else:
+        # 只設置重置標記，讓用戶下次登入時自己設置密碼
+        cursor.execute('''
+            UPDATE users 
+            SET needs_password_reset = 1 
+            WHERE id = ?
+        ''', (user_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': '已設置密碼重置標記，用戶下次登入時需設置新密碼'})
+
+
+# ==================== 註冊和審核 API =====================
+
+@tracking_bp.route('/api/register', methods=['POST'])
+def register_api():
+    """用戶註冊（需主管審核）"""
+    data = request.get_json()
+    
+    if not all([data.get('username'), data.get('password'), data.get('real_name')]):
+        return jsonify({'success': False, 'error': '請填寫所有必填欄位'}), 400
+    
+    if len(data['password']) < 6:
+        return jsonify({'success': False, 'error': '密碼至少6位'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查用戶名是否已存在
+    cursor.execute('SELECT id FROM users WHERE username = ?', (data['username'],))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'error': '用戶名已存在'}), 400
+    
+    # 創建用戶（狀態為 pending，等待審核）
+    from werkzeug.security import generate_password_hash
+    password_hash = generate_password_hash(data['password'])
+    
+    cursor.execute('''
+        INSERT INTO users (username, password_hash, display_name, real_name, role, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (
+        data['username'],
+        password_hash,
+        data['real_name'],  # display_name 使用 real_name
+        data['real_name'],
+        'viewer',  # 默認角色，等待主管審核後決定
+        'pending'  # 待審核狀態
+    ))
+    
+    user_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'message': '註冊成功！請等待主管審核，審核通過後即可登入。',
+        'user_id': user_id
+    })
+
+
+@tracking_bp.route('/api/users/pending', methods=['GET'])
+@admin_required
+def get_pending_users_api():
+    """獲取待審核用戶列表（主管專用）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, username, real_name, display_name, created_at 
+        FROM users 
+        WHERE status = 'pending'
+        ORDER BY created_at DESC
+    ''')
+    
+    users = cursor.fetchall()
+    result = []
+    for user in users:
+        real_name = user['display_name']
+        try:
+            if user['real_name']:
+                real_name = user['real_name']
+        except (KeyError, IndexError):
+            pass
+        
+        result.append({
+            'user_id': user['id'],
+            'username': user['username'],
+            'real_name': real_name,
+            'created_at': user['created_at']
+        })
+    
+    conn.close()
+    return jsonify({'success': True, 'data': result})
+
+
+@tracking_bp.route('/api/users/<int:user_id>/approve', methods=['POST'])
+@admin_required
+def approve_user_api(user_id):
+    """審核通過用戶（主管專用）- 可從pending或rejected切換到active"""
+    data = request.get_json()
+    role = data.get('role', 'sales')  # 默認為業務員
+    
+    if role not in ['admin', 'sales', 'viewer']:
+        return jsonify({'success': False, 'error': '無效的角色'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查用戶是否存在
+    cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'error': '用戶不存在'}), 404
+    
+    try:
+        user_status = user['status']
+        if not user_status:
+            user_status = 'active'
+    except (KeyError, IndexError):
+        user_status = 'active'
+    
+    # 允許從pending或rejected切換到active
+    if user_status not in ['pending', 'rejected']:
+        conn.close()
+        return jsonify({'success': False, 'error': '該用戶狀態不是待審核或已拒絕'}), 400
+    
+    # 更新用戶狀態和角色
+    cursor.execute('''
+        UPDATE users 
+        SET status = 'active', role = ?
+        WHERE id = ?
+    ''', (role, user_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': '用戶審核通過'})
+
+
+@tracking_bp.route('/api/users/<int:user_id>/reject', methods=['POST'])
+@admin_required
+def reject_user_api(user_id):
+    """拒絕用戶註冊（主管專用）- 可從pending或active切換到rejected"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查用戶是否存在
+    cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'error': '用戶不存在'}), 404
+    
+    try:
+        user_status = user['status']
+        if not user_status:
+            user_status = 'active'
+    except (KeyError, IndexError):
+        user_status = 'active'
+    
+    # 允許從pending或active切換到rejected
+    if user_status == 'rejected':
+        conn.close()
+        return jsonify({'success': False, 'error': '該用戶已經是拒絕狀態'}), 400
+    
+    # 更新用戶狀態為 rejected
+    cursor.execute('UPDATE users SET status = ? WHERE id = ?', ('suspended', user_id))
+
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': '用戶狀態已設為拒絕'})
+
+
+@tracking_bp.route('/users')
+@admin_required
+def admin_users():
+    """用戶管理頁面（主管專用）"""
+    return render_template('/users.html')
+
+
+# 添加到 __init__.py 的 admin API 區域
+
+@tracking_bp.route('/api/users/<int:user_id>/suspend', methods=['POST'])
+@admin_required
+def suspend_user_api(user_id):
+    """停權用戶（主管專用）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'error': '用戶不存在'}), 404
+    
+    cursor.execute('UPDATE users SET status = ? WHERE id = ?', ('suspended', user_id))
+
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': '用戶已停權'})
+
+
+@tracking_bp.route('/api/users/<int:user_id>/restore', methods=['POST'])
+@admin_required
+def restore_user_api(user_id):
+    """恢復用戶（主管專用）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'error': '用戶不存在'}), 404
+    
+    cursor.execute('UPDATE users SET status = ? WHERE id = ?', ('active', user_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': '用戶已恢復'})
 
 # ==================== 初始化函數 ====================
 

@@ -26,49 +26,53 @@
     <!-- ====== 统计區（版面同 v10） ====== -->
     <div class="stats">
         <div class="stat">
-            <div class="stat-icon">📦</div>
+            <div class="stat-icon"></div>
             <div>
                 <div class="stat-label">进行中</div>
                 <div class="stat-value" id="totalOrders">{{ active_orders|length }}</div>
             </div>
         </div>
-        
-        <div class="stat red">
-            <div class="stat-icon">🔴</div>
+
+        <div class="stat green">
+            <div class="stat-icon"></div>
             <div>
-                <div class="stat-label">逾期</div>
-                <div class="stat-value" id="redOrders">{{ light_stats.get('red', 0) }}</div>
+                <div class="stat-label">正常</div>
+                <div class="stat-value" id="greenOrders">{{ light_stats.get('green', 0) }}</div>
             </div>
         </div>
 
         <div class="stat yellow">
-            <div class="stat-icon">🟡</div>
+            <div class="stat-icon"></div>
             <div>
                 <div class="stat-label">需注意</div>
                 <div class="stat-value" id="yellowOrders">{{ light_stats.get('yellow', 0) }}</div>
             </div>
         </div>
         
-        <div class="stat green">
-            <div class="stat-icon">✅</div>
+        <div class="stat red">
+            <div class="stat-icon"></div>
             <div>
-                <div class="stat-label">正常（绿灯）</div>
-                <div class="stat-value" id="greenOrders">{{ light_stats.get('green', 0) }}</div>
+                <div class="stat-label">逾期</div>
+                <div class="stat-value" id="redOrders">{{ light_stats.get('red', 0) }}</div>
             </div>
         </div>
+
+
+        
+ 
     </div>
     
     <!-- ====== 流程阶段筛选列（版面同 v10） ====== -->
     <div class="stage-filters">
         <button class="stage-btn active" onclick="filterByStageGroup('all', this)">
-            📋 全部
+            全部
             <span class="stage-count">{{ active_orders|length }}</span>
         </button>
         
         <!-- 新订单/询价阶段 -->
         <div class="stage-filter">
             <button class="stage-btn" onclick="toggleSubstatus('new_and_quote', this)">
-                📝 新订单/询价
+                新订单/询价
                 <span class="stage-count" id="newAndQuoteCount">
                 </span>
                 <span style="font-size: 0.7rem;">▼</span>
@@ -99,9 +103,9 @@
         <!-- 图稿阶段 -->
         <div class="stage-filter">
             <button class="stage-btn" onclick="toggleSubstatus('draft', this)">
-                🎨 图稿阶段
+                图稿阶段
                 <span class="stage-count" id="draftCount">
-                    {{ all_orders | selectattr('current_status','in',['图稿待确认','图稿修改中']) | list | length }}
+                    {{ all_orders | selectattr('current_status','in',['图稿制作中','图稿待确认','图稿修改中']) | list | length }}
                 </span>
                 <span style="font-size: 0.7rem;">▼</span>
             </button>
@@ -110,7 +114,13 @@
                 <div class="substatus-option active" onclick="filterBySubstatus('draft', 'all', this)">
                     <span>全部</span>
                     <span class="count" id="draft-all-count">
-                        {{ all_orders | selectattr('current_status','in',['图稿待确认','图稿修改中']) | list | length }}
+                        {{ all_orders | selectattr('current_status','in',['图稿制作中','图稿待确认','图稿修改中']) | list | length }}
+                    </span>
+                </div>
+                <div class="substatus-option" onclick="filterBySubstatus('draft', '图稿制作中', this)">
+                    <span>图稿制作中</span>
+                    <span class="count" id="draft-making-count">
+                        {{ all_orders | selectattr('current_status','equalto','图稿制作中') | list | length }}
                     </span>
                 </div>
                 <div class="substatus-option" onclick="filterBySubstatus('draft', '图稿待确认', this)">
@@ -131,8 +141,10 @@
         <!-- 打样阶段 -->
         <div class="stage-filter">
             <button class="stage-btn" onclick="toggleSubstatus('sampling', this)">
-                🧪 打样阶段
-                <span class="stage-count" id="samplingCount">{{ all_orders | selectattr('current_status','in',['待打样','打样中','打样待确认','打样修改中']) | list | length }}</span>
+                打样阶段
+                <span class="stage-count" id="samplingCount">
+                    {{ all_orders | selectattr('current_status','in',sampling_statuses) | list | length }}
+                </span>
                 <span style="font-size: 0.7rem;">▼</span>
             </button>
             <div class="substatus-dropdown" id="dropdown-sampling">
@@ -171,26 +183,32 @@
         <!-- 生产阶段 -->
         <div class="stage-filter">
             <button class="stage-btn" onclick="toggleSubstatus('production', this)">
-                🏭 生产阶段
-                <span class="stage-count" id="productionCount">{{ all_orders | selectattr('current_status','in',['待生产','生产中']) | list | length }}</span>
+                生产阶段
+                <span class="stage-count" id="productionCount">{{ all_orders | selectattr('current_status','in',production_statuses) | list | length }}</span>
                 <span style="font-size: 0.7rem;">▼</span>
             </button>
             <div class="substatus-dropdown" id="dropdown-production">
                 
                 <div class="substatus-option active" onclick="filterBySubstatus('production', 'all', this)">
                     <span>全部</span>
-                    <span class="count" id="production-all-count">{{ all_orders | selectattr('current_status','in',['待生产','生产中']) | list | length }}</span>
+                    <span class="count" id="production-all-count">{{ all_orders | selectattr('current_status','in',production_statuses) | list | length }}</span>
                 </div>
                 <div class="substatus-option" onclick="filterBySubstatus('production', '待生产', this)">
                     <span>待生产</span>
                     <span class="count" id="production-pending-count">
-                        {{ all_orders | selectattr('current_status','equalto','待生产') | list | length }}
+                        {% set pending_prod_list = [] %}
+                        {% if STATUS_KEYS %}{% set _ = pending_prod_list.append(STATUS_KEYS.PENDING_PRODUCTION) %}{% endif %}
+                        {% set _ = pending_prod_list.append('待生产') %}
+                        {{ all_orders | selectattr('current_status','in',pending_prod_list) | list | length }}
                     </span>
                 </div>
                 <div class="substatus-option" onclick="filterBySubstatus('production', '生产中', this)">
                     <span>生产中</span>
                     <span class="count" id="production-making-count">
-                        {{ all_orders | selectattr('current_status','equalto','生产中') | list | length }}
+                        {% set producing_list = [] %}
+                        {% if STATUS_KEYS %}{% set _ = producing_list.append(STATUS_KEYS.PRODUCING) %}{% endif %}
+                        {% set _ = producing_list.append('生产中') %}
+                        {{ all_orders | selectattr('current_status','in',producing_list) | list | length }}
                     </span>
                 </div>
             </div>
@@ -198,12 +216,9 @@
 
         <!-- 等国外确认 / 询价 -->
         <button class="stage-btn pending" onclick="filterByStageGroup('waiting_confirm', this)">
-            ⏳ 等国外确认 / 询价
+             等国外确认 / 询价
             <span class="stage-count" id="waitingConfirmCount">{{ quote_orders|length }}</span>
         </button>
-        
-        <!-- Divider -->
-        <div style="width: 1px; height: 30px; background: var(--border); margin: 0 0.5rem;"></div>
         
         <!-- 已完成 / 已取消 Checkbox -->
         <label class="filter-checkbox">
@@ -219,21 +234,48 @@
         </label>
         
         {% if session.get('role') == 'admin' %}
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem;">
-            <div class="search-box">
-                <span>🔍</span>
-                <input type="text" id="searchInput" placeholder="搜尋订单號、客户名称..." value="">
-            </div>
-            <button class="btn btn-secondary" onclick="exportData()">📤 匯出</button>
+        <div class="search-box" style="flex: 1; min-width: 200px; max-width: 400px;">
+            <span></span>
+            <input type="text" id="searchInput" placeholder="搜尋订单號、客户名称..." value="">
         </div>
+        <button class="btn btn-secondary" onclick="exportData()"> 匯出</button>
         {% else %}
-        <div style="margin-left: auto;">
-            <div class="search-box">
-                <span>🔍</span>
-                <input type="text" id="searchInput" placeholder="搜尋订单號、客户名称..." value="">
-            </div>
+        <div class="search-box" style="flex: 1; min-width: 200px; max-width: 400px; margin-left: auto;">
+            <span>🔍</span>
+            <input type="text" id="searchInput" placeholder="搜尋订单號、客户名称..." value="">
         </div>
         {% endif %}
+    </div>
+    
+    <!-- ====== 燈號篩選（紅綠黃燈） ====== -->
+    <div class="light-filters">
+        <button class="light-filter-btn" id="lightFilterRed" data-light="red" onclick="toggleLightFilter('red', this)">
+            <span class="light-emoji">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7" fill="#EF4444" stroke="#DC2626" stroke-width="1"/>
+                </svg>
+            </span>
+            <span class="light-label">逾期</span>
+            <span class="light-count" id="lightCountRed">{{ light_stats.get('red', 0) }}</span>
+        </button>
+        <button class="light-filter-btn" id="lightFilterYellow" data-light="yellow" onclick="toggleLightFilter('yellow', this)">
+            <span class="light-emoji">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7" fill="#F59E0B" stroke="#D97706" stroke-width="1"/>
+                </svg>
+            </span>
+            <span class="light-label">需注意</span>
+            <span class="light-count" id="lightCountYellow">{{ light_stats.get('yellow', 0) }}</span>
+        </button>
+        <button class="light-filter-btn" id="lightFilterGreen" data-light="green" onclick="toggleLightFilter('green', this)">
+            <span class="light-emoji">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7" fill="#22C55E" stroke="#16A34A" stroke-width="1"/>
+                </svg>
+            </span>
+            <span class="light-label">正常</span>
+            <span class="light-count" id="lightCountGreen">{{ light_stats.get('green', 0) }}</span>
+        </button>
     </div>
 
     <!-- ====== 订单表格（表頭風格同 v10；资料來自后端） ====== -->
@@ -269,7 +311,10 @@
                             阶段 / 状态 <span class="sort-icon">⇅</span>
                         </th>
                         <th class="sortable" data-sort="status_days">
-                            等待天數 <span class="sort-icon">⇅</span>
+                            等待天数 <span class="sort-icon">⇅</span>
+                        </th>
+                        <th class="sortable" data-sort="notes">
+                            备注 <span class="sort-icon">⇅</span>
                         </th>
                         {% if session.get('role') == 'admin' %}
                         <th>操作</th>
@@ -284,19 +329,27 @@
                         data-customer-name="{{ order.customer_name }}"
                         data-status="{{ order.current_status }}"
                         data-light="{{ order.status_light }}"
-                        data-stage-group="{% if order.current_status in new_and_quote_statuses %}new_and_quote{% elif order.current_status in draft_statuses %}draft{% elif order.current_status in sampling_statuses %}sampling{% elif order.current_status in production_statuses %}production{% elif order.current_status == STATUS.COMPLETED %}completed{% elif order.current_status == STATUS.CANCELLED %}cancelled{% else %}all{% endif %}">
+                        data-stage-group="{% if order.current_status in new_and_quote_statuses or (STATUS_KEYS and order.current_status == STATUS_KEYS.NEW_ORDER) or (STATUS_KEYS and order.current_status == STATUS_KEYS.QUOTE_CONFIRMING) %}new_and_quote{% elif order.current_status in draft_statuses or (STATUS_KEYS and order.current_status in [STATUS_KEYS.DRAFT_MAKING, STATUS_KEYS.DRAFT_CONFIRMING, STATUS_KEYS.DRAFT_REVISING]) %}draft{% elif order.current_status in sampling_statuses or (STATUS_KEYS and order.current_status in [STATUS_KEYS.PENDING_SAMPLE, STATUS_KEYS.SAMPLING, STATUS_KEYS.SAMPLE_CONFIRMING, STATUS_KEYS.SAMPLE_REVISING]) %}sampling{% elif order.current_status in production_statuses or (STATUS_KEYS and order.current_status in [STATUS_KEYS.PENDING_PRODUCTION, STATUS_KEYS.PRODUCING]) %}production{% elif order.current_status == STATUS.COMPLETED or (STATUS_KEYS and order.current_status == STATUS_KEYS.COMPLETED) %}completed{% elif order.current_status == STATUS.CANCELLED or (STATUS_KEYS and order.current_status == STATUS_KEYS.CANCELLED) %}cancelled{% else %}all{% endif %}">
                         <td class="expand-cell">
                             <span class="expand-btn" id="expand-{{ order.order_number }}">▶</span>
                         </td>
                         <td class="light">
                             {% if order.status_light == 'red' %}
-                                🔴
+                                <svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="7" fill="#EF4444" stroke="#DC2626" stroke-width="1"/>
+                                </svg>
                             {% elif order.status_light == 'yellow' %}
-                                🟡
-                            {% elif order.current_status == STATUS.CANCELLED %}
-                                ⚫
+                                <svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="7" fill="#F59E0B" stroke="#D97706" stroke-width="1"/>
+                                </svg>
+                            {% elif order.current_status == STATUS.CANCELLED or (STATUS_KEYS and order.current_status == STATUS_KEYS.CANCELLED) %}
+                                <svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="7" fill="#6B7280" stroke="#4B5563" stroke-width="1"/>
+                                </svg>
                             {% else %}
-                                🟢
+                                <svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="7" fill="#22C55E" stroke="#16A34A" stroke-width="1"/>
+                                </svg>
                             {% endif %}
                         </td>
                         <td class="order-date">{{ order.order_date }}</td>
@@ -313,23 +366,12 @@
                         <td>{{ order.quantity or '-' }}</td>
                         <td>{{ order.factory or '-' }}</td>
                         <td>
-                            <div class="stage-info">
-                                <div class="stage-major">
-                                    {% if order.current_status in draft_statuses %}
-                                        📄 图稿阶段
-                                    {% elif order.current_status in sampling_statuses %}
-                                        🧪 打样阶段
-                                    {% elif order.current_status in production_statuses %}
-                                        🏭 生产阶段
-                                    {% elif order.current_status == STATUS.COMPLETED %}
-                                        ✅ 已完成
-                                    {% elif order.current_status == STATUS.CANCELLED %}
-                                        ❌ 已取消
-                                    {% else %}
-                                        📋 其他
-                                    {% endif %}
-                                </div>
-                                <div class="stage-current">{{ order.current_status }}</div>
+                            <div class="stage-current" data-status-key="{{ order.current_status }}">
+                                {% if STATUS_LABELS and order.current_status in STATUS_LABELS %}
+                                    {{ STATUS_LABELS[order.current_status].zh_cn }}
+                                {% else %}
+                                    {{ order.current_status }}
+                                {% endif %}
                             </div>
                         </td>
                         <td>
@@ -339,6 +381,34 @@
                                 {% endif %}">
                                 {{ order.status_days }}天
                             </span>
+                        </td>
+                        <td class="order-notes" data-order-number="{{ order.order_number }}">
+                            <div class="notes-container">
+                                <button class="notes-edit-btn" 
+                                        onclick="toggleNotesEdit('{{ order.order_number }}', this); event.stopPropagation();"
+                                        title="編輯備註">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                </button>
+                                <div class="notes-display">
+                                    {% if order.notes and order.notes.strip() %}
+                                        <span class="notes-preview" title="{{ order.notes }}">
+                                            {{ order.notes[:30] }}{% if order.notes|length > 30 %}...{% endif %}
+                                        </span>
+                                    {% else %}
+                                        <span class="notes-empty">-</span>
+                                    {% endif %}
+                                </div>
+                                <div class="notes-edit" style="display: none;">
+                                    <textarea class="notes-input" rows="2" placeholder="輸入備註...">{{ order.notes or '' }}</textarea>
+                                    <div class="notes-edit-actions">
+                                        <button class="notes-save-btn" onclick="saveNotes('{{ order.order_number }}', this); event.stopPropagation();">保存</button>
+                                        <button class="notes-cancel-btn" onclick="cancelNotesEdit('{{ order.order_number }}', this); event.stopPropagation();">取消</button>
+                                    </div>
+                                </div>
+                            </div>
                         </td>
 
                         {% if session.get('role') == 'admin' %}
@@ -350,8 +420,8 @@
                                 </div>
                                 <button type="button"
                                         class="quick-btn quick-btn-detail"
-                                        onclick="openDetailDrawerFromTimeline('{{ order.order_number }}', '{{ order.customer_name }}', {{ order.status_days }}); event.stopPropagation();">
-                                    ⋯ 詳情
+                                        onclick="openDetailDrawerFromRow(this); event.stopPropagation();">
+                                    ⋯ 详情
                                 </button>
                             </div>
                         </td>
@@ -414,7 +484,7 @@
             
             <div class="modal-label">📝 备注（可選）</div>
             <textarea class="modal-textarea" id="quickActionNote" placeholder="记录相关信息，例如：客户要求、注意事项等..."></textarea>
-            <div class="modal-hint">💡 日期將自動使用今天：<span id="quickActionDate"></span></div>
+            <div class="modal-hint">💡 日期将自动使用今天：<span id="quickActionDate"></span></div>
         </div>
         <div class="modal-footer">
             <button class="modal-btn cancel" onclick="closeQuickActionModal()">取消</button>
@@ -440,31 +510,31 @@
                 <div style="font-size: 0.8rem; color: var(--text-3); margin-bottom: 0.75rem;">选择要退回到的步驟：</div>
                 
                 <label class="back-step-option">
-                    <input type="radio" name="backStep" value="打样製作中">
+                    <input type="radio" name="backStep" value="打样中">
                     <div class="back-step-info">
-                        <div class="back-step-name">打样製作中</div>
-                        <div class="back-step-desc">重新製作样品</div>
+                        <div class="back-step-name">打样中</div>
+                        <div class="back-step-desc">重新制作样品</div>
                     </div>
                 </label>
                 
                 <label class="back-step-option">
-                    <input type="radio" name="backStep" value="準備打样">
+                    <input type="radio" name="backStep" value="待打样">
                     <div class="back-step-info">
-                        <div class="back-step-name">準備打样</div>
-                        <div class="back-step-desc">重新準備打样</div>
+                        <div class="back-step-name">准备打样</div>
+                        <div class="back-step-desc">重新准备打样</div>
                     </div>
                 </label>
                 
                 <label class="back-step-option">
-                    <input type="radio" name="backStep" value="图稿待确认">
+                    <input type="radio" name="backStep" value="图稿制作中">
                     <div class="back-step-info">
-                        <div class="back-step-name">图稿待确认</div>
-                        <div class="back-step-desc">需要重新做图</div>
+                        <div class="back-step-name">图稿制作中</div>
+                        <div class="back-step-desc">重新制作图稿</div>
                     </div>
                 </label>
             </div>
             
-            <div class="modal-label">📝 退回原因（建議填寫）</div>
+            <div class="modal-label">📝 退回原因（建议填写）</div>
             <textarea class="modal-textarea" id="backStepNote" placeholder="說明為什麼要退回..."></textarea>
         </div>
         <div class="modal-footer">
@@ -528,11 +598,11 @@
             <div class="modal-info">
                 <div style="color: var(--text-2);">
                     將直接從 <strong>图稿待确认</strong> 进入
-                    <strong style="color: var(--blue);">準備生产</strong>
+                    <strong style="color: var(--blue);">待生产</strong>
                 </div>
             </div>
             
-            <div class="modal-label">📝 跳過原因（可選）</div>
+            <div class="modal-label">📝 跳过原因（可选）</div>
             <textarea class="modal-textarea" id="skipReason" placeholder="例如：老客户重複订单..."></textarea>
         </div>
         <div class="modal-footer">

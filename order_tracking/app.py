@@ -11,17 +11,27 @@ current_dir = Path(__file__).parent
 parent_dir = current_dir.parent
 sys.path.insert(0, str(parent_dir))
 
-from flask import Flask
+from flask import Flask, redirect, url_for, session, request, jsonify
+from werkzeug.exceptions import NotFound
 from order_tracking import tracking_bp, init_db
+from order_tracking.config import SECRET_KEY
 
 app = Flask(__name__)
-app.secret_key = 'development-secret-key-change-in-production'
+app.secret_key = SECRET_KEY
 
 # 初始化數據庫
 init_db()
 
 # 註冊Blueprint
 app.register_blueprint(tracking_bp)
+
+# 全局 404 錯誤處理器 - 處理所有未匹配的路由
+# 注意：Blueprint 的錯誤處理器會優先處理 /tracking/* 路徑
+@app.errorhandler(404)
+def handle_global_404(e):
+    """處理全局 404 錯誤 - 錯誤的 URL 跳轉到 tracking 登入頁面"""
+    # 所有未匹配的路由都重定向到 /tracking（Blueprint 會處理）
+    return redirect('/tracking')
 
 if __name__ == '__main__':
     print("=" * 50)

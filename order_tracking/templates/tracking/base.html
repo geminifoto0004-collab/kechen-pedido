@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}訂單流程追蹤系統{% endblock %}</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('tracking_bp.static', filename='tracking.css') }}">
+    <link rel="stylesheet" href="{{ url_for('tracking_bp.static', filename='css/tracking.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- 頂部導航欄 -->
     <div class="header">
         <div class="header-content">
-            <div class="title">📦 訂單流程追蹤系統</div>
+            <div class="title">订单流程追踪系统</div>
             
             <div class="nav-user">
                 <span class="user-name">👤 {{ session.get('display_name', '用戶') }}</span>
@@ -35,25 +35,61 @@
                 <a href="{{ url_for('tracking_bp.index') }}" 
                    class="sidebar-item {% if request.endpoint == 'tracking_bp.index' %}active{% endif %}"
                    data-tooltip="主頁">
-                    <span class="sidebar-icon">🏠</span>
+                    <span class="sidebar-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
+                    </span>
                     <span class="sidebar-text">主頁</span>
-                </a>
- 
-                <a href="{{ url_for('tracking_bp.reports') }}" 
-                   class="sidebar-item {% if request.endpoint == 'tracking_bp.reports' %}active{% endif %}"
-                   data-tooltip="報表">
-                    <span class="sidebar-icon">📊</span>
-                    <span class="sidebar-text">報表</span>
                 </a>
                 
                 {% if session.get('role') == 'admin' %}
                 <button class="sidebar-item sidebar-button" 
                         onclick="showNewOrderModal()"
                         data-tooltip="新增訂單">
-                    <span class="sidebar-icon">➕</span>
+                    <span class="sidebar-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </span>
                     <span class="sidebar-text">新增訂單</span>
                 </button>
+                
+                <a href="{{ url_for('tracking_bp.admin_users') }}" 
+                   class="sidebar-item {% if request.endpoint == 'tracking_bp.admin_users' %}active{% endif %}"
+                   data-tooltip="用戶管理">
+                    <span class="sidebar-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">用戶管理</span>
+                </a>
                 {% endif %}
+                
+                {% if session.get('role') == 'sales' %}
+                <!-- 業務員專用功能（未來擴展） -->
+                {% endif %}
+            </div>
+            
+            <!-- 設定按鈕 - 放在最下面 -->
+            <div class="sidebar-footer">
+                <button class="sidebar-item sidebar-button" 
+                        onclick="openSettings()"
+                        data-tooltip="設定">
+                    <span class="sidebar-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6m9-7h-6m-6 0H3m15.364 6.364l-4.243-4.243m-4.242 0L5.636 18.364M18.364 5.636l-4.243 4.243m-4.242 0L5.636 5.636"></path>
+                        </svg>
+                    </span>
+                    <span class="sidebar-text">設定</span>
+                </button>
             </div>
         </aside>
 
@@ -66,52 +102,131 @@
     <!-- 共用：側邊抽屜覆蓋層 -->
     <div class="drawer-overlay" id="detailDrawerOverlay" onclick="closeDetailDrawer()"></div>
 
-    <!-- 共用：侧边抽屉 -->
+    <!-- 共用：侧边抽屉 - 改进版 -->
     <div class="detail-drawer" id="detailDrawer">
         <div class="drawer-header">
-            <div class="drawer-header-top">
-                <div class="drawer-title">📊 订单详细历史</div>
-                <button class="drawer-close" onclick="closeDetailDrawer()">✕</button>
+            <div class="drawer-header-main">
+                <div class="drawer-order-badge">ORDER DETAILS</div>
+                <button class="drawer-close" onclick="closeDetailDrawer()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
+            
+            <!-- 訂單號碼和客戶 - 放在 ORDER DETAILS 區塊內 -->
+            <div class="drawer-main-info">
+                <div class="main-info-item">
+                    <span class="main-info-label">訂單號碼</span>
+                    <span class="main-info-value">
+                        <span class="order-hash">#</span>
+                        <span id="drawerOrderNumber">-</span>
+                    </span>
+                </div>
+                <div class="main-info-item">
+                    <span class="main-info-label">客戶</span>
+                    <span class="main-info-value" id="drawerCustomerName">-</span>
+                </div>
+            </div>
+            
+            <!-- 其他信息區域 -->
             <div class="drawer-order-info">
-                <div class="info-item">
-                    <span class="info-label">订单号</span>
-                    <span class="info-value" id="drawerOrderNumber">-</span>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="info-label">總耗時</span>
+                        <span class="info-value" id="drawerTotalDays">0 天</span>
+                    </div>
+                    <div class="info-item" id="drawerExpectedDelivery" style="display: none;">
+                        <span class="info-label">預計交貨</span>
+                        <span class="info-value" id="drawerExpectedDeliveryDate">-</span>
+                    </div>
                 </div>
-                <div class="info-item">
-                    <span class="info-label">客户</span>
-                    <span class="info-value" id="drawerCustomerName">-</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">总耗时</span>
-                    <span class="info-value" id="drawerTotalDays" style="color: #ef4444;">计算中...</span>
+            </div>
+            
+            <!-- 訂單備註 - 可編輯 -->
+            <div class="drawer-order-notes-compact" id="drawerOrderNotes" style="display: none;" data-order-number="">
+                <div class="drawer-notes-container">
+                    <button class="drawer-notes-edit-btn" 
+                            onclick="toggleDrawerNotesEdit(this); event.stopPropagation();"
+                            title="編輯備註">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                    <div class="drawer-notes-display">
+                        <span class="drawer-notes-text" id="drawerOrderNotesContent">-</span>
+                    </div>
+                    <div class="drawer-notes-edit" style="display: none;">
+                        <textarea class="drawer-notes-input" rows="2" placeholder="輸入備註..."></textarea>
+                        <div class="drawer-notes-edit-actions">
+                            <button class="drawer-notes-save-btn" onclick="saveDrawerNotes(this); event.stopPropagation();">保存</button>
+                            <button class="drawer-notes-cancel-btn" onclick="cancelDrawerNotesEdit(this); event.stopPropagation();">取消</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         
         <div class="drawer-body">
-            <!-- 🎯 快速操作区 -->
-            <div class="drawer-actions-section" id="drawerQuickActions" style="display: none;">
-                <div class="actions-title">🎯 快速操作</div>
+            <!-- 快速操作区 -->
+            <div class="drawer-section" id="drawerQuickActions" style="display: none;">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                    </div>
+                    <div class="section-title">快速操作</div>
+                </div>
                 <div class="actions-grid" id="drawerActionsGrid">
                     <!-- 由JavaScript动态生成 -->
                 </div>
             </div>
             
-            <!-- ⚙️ 订单管理区 -->
-            <div class="drawer-actions-section" id="drawerManagement" style="display: none;">
-                <div class="actions-title">⚙️ 订单管理</div>
+            <!-- 订单管理区 -->
+            <div class="drawer-section" id="drawerManagement" style="display: none;">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6"></path>
+                        </svg>
+                    </div>
+                    <div class="section-title">订单管理</div>
+                </div>
                 <div class="actions-grid">
                     <button class="drawer-action-btn btn-secondary" onclick="editOrderFromDrawer()">
-                        ✏️ 编辑订单
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        编辑订单
                     </button>
-                    <button class="drawer-action-btn btn-danger" onclick="cancelOrderFromDrawer()">
-                        ❌ 取消订单
+                    <button class="drawer-action-btn btn-danger-outline" onclick="cancelOrderFromDrawer()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                        取消订单
                     </button>
                 </div>
             </div>
             
-            <div class="drawer-timeline-title">⏱️ 完整操作历史</div>
+            <!-- 时间轴标题 -->
+            <div class="drawer-timeline-header">
+                <div class="timeline-header-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </div>
+                <div class="timeline-header-title">流程进度</div>
+            </div>
+            
+            <!-- 时间轴主体 -->
             <div class="drawer-timeline" id="drawerTimeline">
                 <!-- 由JavaScript动态生成 -->
             </div>
@@ -122,7 +237,7 @@
     <div class="modal-overlay" id="skipStageModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>⚡ 跳过当前阶段</h3>
+                <h3>跳过当前阶段</h3>
                 <button class="modal-close" onclick="closeSkipStageModal()">✕</button>
             </div>
             <div class="modal-body">
@@ -146,7 +261,7 @@
             </div>
             <div class="modal-footer" style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button class="btn btn-secondary" onclick="closeSkipStageModal()">取消</button>
-                <button class="btn btn-primary" onclick="confirmSkipStage()">确认跳过 ✅</button>
+                <button class="btn btn-primary" onclick="confirmSkipStage()">确认跳过</button>
             </div>
         </div>
     </div>
@@ -155,7 +270,7 @@
     <div class="modal-overlay" id="editOrderModal">
         <div class="modal-content modal-large">
             <div class="modal-header">
-                <h3 id="editOrderModalTitle">✏️ 编辑订单</h3>
+                <h3 id="editOrderModalTitle">编辑订单</h3>
                 <button class="modal-close" onclick="closeEditOrderModal()">✕</button>
             </div>
             <div class="modal-body">
@@ -163,7 +278,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                         <label class="form-label">订单号</label>
                         <button type="button" id="toggleOrderNumberEdit" class="btn-link" style="display: none; font-size: 0.75rem; padding: 0.25rem 0.5rem; color: #3b82f6; cursor: pointer; background: none; border: none;" onclick="toggleOrderNumberEdit()">
-                            ✏️ 修改订单号
+                            修改订单号
                         </button>
                     </div>
                     <input type="text" id="editOrderNumber" class="form-input" placeholder="留空則創建詢價/修圖需求（自動生成編號）">
@@ -202,13 +317,16 @@
                         <input type="text" id="editFactory" class="form-input">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">预计交货日期</label>
+                        <label class="form-label">预计交货日期 <span style="color: #999; font-size: 0.75rem; font-weight: normal;">(可選)</span></label>
                         <input type="date" id="editExpectedDeliveryDate" class="form-input">
+                        <div style="font-size: 0.75rem; color: #999; margin-top: 4px; line-height: 1.4;">
+                            
+                        </div>
                     </div>
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">生产类型</label>
+                    <label class="form-label">产品类型</label>
                     <input type="text" id="editProductionType" class="form-input">
                 </div>
                 
@@ -219,7 +337,7 @@
             </div>
             <div class="modal-footer" style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button class="btn btn-secondary" onclick="closeEditOrderModal()">取消</button>
-                <button class="btn btn-primary" onclick="confirmEditOrder()" id="editOrderSubmitBtn">保存修改 💾</button>
+                <button class="btn btn-primary" onclick="confirmEditOrder()" id="editOrderSubmitBtn">保存修改</button>
             </div>
         </div>
     </div>
@@ -228,7 +346,7 @@
     <div class="modal-overlay" id="cancelOrderModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>❌ 取消订单</h3>
+                <h3>取消订单</h3>
                 <button class="modal-close" onclick="closeCancelOrderModal()">✕</button>
             </div>
             <div class="modal-body">
@@ -273,6 +391,17 @@
             </div>
             <div class="modal-body">
                 <div class="modal-info">
+                    <!-- 状态转换显示区域（可选，只在有状态信息时显示） -->
+                    <div id="confirmModalStatusChange" class="status-change" style="display: none;">
+                        <span id="confirmModalCurrentStatus" style="font-weight: 600; color: var(--text-1);"></span>
+                        <span class="status-arrow" style="font-size: 1.2rem; color: var(--text-2);">→</span>
+                        <span id="confirmModalNextStatus" style="font-weight: 600; color: var(--blue);"></span>
+                    </div>
+                    <!-- 订单号显示（可选） -->
+                    <div id="confirmModalOrderInfo" style="text-align: center; font-size: 0.85rem; color: var(--text-2); margin-top: 0.5rem; display: none;">
+                        订单 <strong id="confirmModalOrderNumber">#-</strong>
+                    </div>
+                    <!-- 普通消息显示 -->
                     <div id="confirmModalMessage" style="white-space: pre-line; line-height: 1.6;"></div>
                 </div>
             </div>
@@ -301,9 +430,47 @@
         </div>
     </div>
 
-    <script src="{{ url_for('tracking_bp.static', filename='STATUS_SYSTEM.js') }}"></script>
-    <script src="{{ url_for('tracking_bp.static', filename='new_order.js') }}"></script>
-    <script src="{{ url_for('tracking_bp.static', filename='tracking.js') }}"></script>
+    <script src="{{ url_for('tracking_bp.static', filename='js/STATUS_SYSTEM.js') }}"></script>
+    <!-- 設定 Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="settings-modal">
+            <div class="settings-sidebar">
+                <div class="settings-sidebar-header">
+                    <h3>設定</h3>
+                    <button class="settings-close" onclick="closeSettingsModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="settings-menu">
+                    <button class="settings-menu-item active" onclick="showSettingsSection('columns')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                        </svg>
+                        <span>表格欄位</span>
+                    </button>
+                </div>
+            </div>
+            <div class="settings-content">
+                <div class="settings-section active" id="settingsColumns">
+                    <h2>表格欄位設定</h2>
+                    <p class="settings-description">選擇要在表格中顯示的欄位</p>
+                    <div class="column-settings-container">
+                        <div id="columnSettingsList" class="column-settings-list">
+                            <!-- 由 JavaScript 動態生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('tracking_bp.static', filename='js/new_order.js') }}"></script>
+    <script src="{{ url_for('tracking_bp.static', filename='js/tracking.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

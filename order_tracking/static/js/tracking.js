@@ -1,4 +1,79 @@
 /**
+ * 获取状态灯号的 SVG 图标（替代 emoji，确保跨平台兼容）
+ */
+function getStatusLightIcon(light) {
+    const icons = {
+        'red': '<svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#EF4444" stroke="#DC2626" stroke-width="1"/></svg>',
+        'yellow': '<svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#F59E0B" stroke="#D97706" stroke-width="1"/></svg>',
+        'green': '<svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#22C55E" stroke="#16A34A" stroke-width="1"/></svg>',
+        'black': '<svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" fill="#6B7280" stroke="#4B5563" stroke-width="1"/></svg>'
+    };
+    return icons[light] || icons['green'];
+}
+
+// 在 DOMContentLoaded 之前，先檢查是否有自動觸發的 Toast
+(function() {
+    'use strict';
+    
+    // 儲存原始的 showToast 函數
+    const originalShowToast = window.showToast;
+    
+    // 頁面載入完成前，禁止顯示 Toast
+    let pageLoaded = false;
+    
+    // 覆寫 showToast 函數
+    window.showToast = function(title, message, type = 'success', duration = 3000) {
+        // 如果頁面還沒載入完成，忽略 Toast
+        if (!pageLoaded) {
+            console.log('[阻止] 頁面載入中，忽略 Toast:', title);
+            return;
+        }
+        
+        // 頁面載入後正常顯示
+        if (originalShowToast) {
+            originalShowToast(title, message, type, duration);
+        }
+    };
+    
+    // 頁面載入完成後，允許顯示 Toast
+    window.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            pageLoaded = true;
+            console.log('[允許] 頁面載入完成，現在可以顯示 Toast');
+        }, 500); // 延遲 500ms，確保頁面完全載入
+    });
+    
+    // 如果頁面已經載入完成
+    if (document.readyState === 'complete') {
+        setTimeout(function() {
+            pageLoaded = true;
+        }, 500);
+    }
+})();
+
+// 修復 Toast 自動消失
+function fixToastAutoHide() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .toast {
+            pointer-events: auto !important;
+        }
+        .toast.show {
+            display: flex !important;
+            opacity: 1 !important;
+            transform: translateX(0) !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// 頁面載入時執行
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixToastAutoHide);
+} else {
+    fixToastAutoHide();
+}
+/**
  * 订单流程追踪系统
  */
 
@@ -75,7 +150,7 @@ function showToast(title, message, type = 'success', duration = 3000) {
                 <div class="toast-title" id="toastTitle"></div>
                 <div class="toast-message" id="toastMessage"></div>
             </div>
-            <button class="modal-close" onclick="this.parentElement.classList.remove('show'); setTimeout(() => this.parentElement.remove(), 300);" style="background: none; border: none; font-size: 1.2rem; color: #6b7280; cursor: pointer; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">✕</button>
+            <button class="modal-close" onclick="this.parentElement.classList.remove('show'); setTimeout(() => this.parentElement.remove(), 300);" style="background: none; border: none; font-size: 1.2rem; color: #6b7280; cursor: pointer; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">×</button>
         `;
         document.body.appendChild(toast);
     }
@@ -92,16 +167,10 @@ function showToast(title, message, type = 'success', duration = 3000) {
         toast.classList.add('toast-success');
     }
 
-    // 设置图标
+    // 设置图标 - 使用 CSS 类控制显示
     const iconEl = toast.querySelector('.toast-icon');
     if (iconEl) {
-        if (type === 'error' || type === 'danger') {
-            iconEl.textContent = '❌';
-        } else if (type === 'warning') {
-            iconEl.textContent = '⚠️';
-        } else {
-            iconEl.textContent = '✅';
-        }
+        iconEl.textContent = ''; // 图标由 CSS ::before 控制
     }
 
     const titleEl = document.getElementById('toastTitle');
@@ -132,12 +201,17 @@ function getTodayDate() {
 }
 
 // 通用确认 Modal（Promise 版本，替换 confirm）
-function showConfirmModal(message, title = '确认操作', confirmText = '确认', cancelText = '取消', danger = false) {
+function showConfirmModal(message, title = '确认操作', confirmText = '确认', cancelText = '取消', danger = false, options = {}) {
     return new Promise((resolve, reject) => {
         const modal = document.getElementById('confirmModal');
         const titleEl = document.getElementById('confirmModalTitle');
         const messageEl = document.getElementById('confirmModalMessage');
         const confirmBtn = document.getElementById('confirmModalConfirmBtn');
+        const statusChangeEl = document.getElementById('confirmModalStatusChange');
+        const currentStatusEl = document.getElementById('confirmModalCurrentStatus');
+        const nextStatusEl = document.getElementById('confirmModalNextStatus');
+        const orderInfoEl = document.getElementById('confirmModalOrderInfo');
+        const orderNumberEl = document.getElementById('confirmModalOrderNumber');
         
         if (!modal) {
             // 如果 modal 不存在，回退到原生的 confirm
@@ -146,9 +220,40 @@ function showConfirmModal(message, title = '确认操作', confirmText = '确认
         }
         
         titleEl.textContent = title;
-        messageEl.textContent = message;
         confirmBtn.textContent = confirmText;
         confirmBtn.className = danger ? 'modal-btn danger' : 'modal-btn confirm';
+        
+        // 如果有状态转换信息，显示状态转换区域
+        if (options.currentStatus && options.nextStatus) {
+            const displayCurrent = typeof displayStatus === 'function' ? displayStatus(options.currentStatus) : options.currentStatus;
+            const displayNext = typeof displayStatus === 'function' ? displayStatus(options.nextStatus) : options.nextStatus;
+            
+            if (currentStatusEl) currentStatusEl.textContent = displayCurrent;
+            if (nextStatusEl) {
+                nextStatusEl.textContent = displayNext;
+                // 如果是危险操作（撤销），使用红色；否则使用蓝色
+                nextStatusEl.style.color = danger ? 'var(--red)' : 'var(--blue)';
+            }
+            if (statusChangeEl) statusChangeEl.style.display = 'flex';
+            
+            // 隐藏普通消息（因为状态转换区域已经显示了信息）
+            if (messageEl) messageEl.style.display = 'none';
+        } else {
+            // 没有状态转换信息，显示普通消息
+            if (statusChangeEl) statusChangeEl.style.display = 'none';
+            if (messageEl) {
+                messageEl.textContent = message;
+                messageEl.style.display = 'block';
+            }
+        }
+        
+        // 如果有订单号，显示订单信息
+        if (options.orderNumber) {
+            if (orderNumberEl) orderNumberEl.textContent = `#${options.orderNumber}`;
+            if (orderInfoEl) orderInfoEl.style.display = 'block';
+        } else {
+            if (orderInfoEl) orderInfoEl.style.display = 'none';
+        }
         
         // 清除旧的事件监听器
         const newConfirmBtn = confirmBtn.cloneNode(true);
@@ -292,11 +397,256 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // 摺疊 / 展開側邊欄（主頁等共用）
+function openSettings() {
+    const modal = document.getElementById('settingsModal');
+    if (!modal) {
+        console.error('Settings modal not found');
+        return;
+    }
+    
+    // 檢測表格欄位
+    detectTableColumns();
+    
+    // 載入已保存的設定
+    loadColumnSettings();
+    
+    // 顯示 modal
+    modal.classList.add('show');
+}
+
+function closeSettingsModal() {
+    const modal = document.getElementById('settingsModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+// 檢測表格欄位
+function detectTableColumns() {
+    const table = document.querySelector('table');
+    if (!table) return;
+    
+    const thead = table.querySelector('thead tr');
+    if (!thead) return;
+    
+    const columns = [];
+    const ths = thead.querySelectorAll('th');
+    
+    // 載入已保存的設定
+    const saved = localStorage.getItem('tableColumnSettings');
+    let savedSettings = {};
+    if (saved) {
+        try {
+            savedSettings = JSON.parse(saved);
+        } catch (e) {
+            console.error('Failed to parse saved settings:', e);
+        }
+    }
+    
+    ths.forEach((th, index) => {
+        const text = th.textContent.trim();
+        const sortAttr = th.getAttribute('data-sort');
+        const columnKey = sortAttr || `col_${index}`;
+        
+        // 跳過空欄位（展開按鈕、燈號等），但保留它們的索引
+        if (text || sortAttr || index < 2) {
+            // 檢查是否有保存的設定
+            const savedSetting = savedSettings[columnKey];
+            const isVisible = savedSetting ? savedSetting.visible : (text || sortAttr ? true : index < 2);
+            
+            columns.push({
+                index: index,
+                key: columnKey,
+                label: text || (index === 0 ? '展開' : index === 1 ? '狀態' : `欄位 ${index + 1}`),
+                visible: isVisible
+            });
+        }
+    });
+    
+    // 保存到全局變量
+    window.tableColumns = columns;
+    
+    // 渲染設定選項
+    renderColumnSettings(columns);
+}
+
+// 渲染欄位設定選項
+function renderColumnSettings(columns) {
+    const container = document.getElementById('columnSettingsList');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    columns.forEach((col, index) => {
+        const item = document.createElement('div');
+        item.className = 'column-setting-item';
+        item.innerHTML = `
+            <label class="column-toggle">
+                <input type="checkbox" 
+                       data-column-index="${col.index}" 
+                       data-column-key="${col.key}"
+                       ${col.visible ? 'checked' : ''}
+                       onchange="toggleColumnVisibility(this)">
+                <span class="column-label">${col.label}</span>
+            </label>
+        `;
+        container.appendChild(item);
+    });
+}
+
+// 切換欄位顯示/隱藏
+function toggleColumnVisibility(checkbox) {
+    const columnIndex = parseInt(checkbox.getAttribute('data-column-index'));
+    const columnKey = checkbox.getAttribute('data-column-key');
+    const isVisible = checkbox.checked;
+    
+    // 更新表格
+    const table = document.querySelector('table');
+    if (!table) return;
+    
+    // 隱藏/顯示表頭
+    const ths = table.querySelectorAll(`thead tr th:nth-child(${columnIndex + 1})`);
+    ths.forEach(th => {
+        if (isVisible) {
+            th.style.display = '';
+        } else {
+            th.style.display = 'none';
+        }
+    });
+    
+    // 隱藏/顯示表體
+    const tds = table.querySelectorAll(`tbody tr td:nth-child(${columnIndex + 1})`);
+    tds.forEach(td => {
+        if (isVisible) {
+            td.style.display = '';
+        } else {
+            td.style.display = 'none';
+        }
+    });
+    
+    // 保存設定
+    saveColumnSettings();
+}
+
+// 顯示設定區塊
+function showSettingsSection(section) {
+    // 移除所有 active 類
+    document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.settings-menu-item').forEach(m => m.classList.remove('active'));
+    
+    // 添加 active 類
+    const sectionEl = document.getElementById(`settings${section.charAt(0).toUpperCase() + section.slice(1)}`);
+    if (sectionEl) {
+        sectionEl.classList.add('active');
+    }
+    
+    const menuItem = event?.target?.closest('.settings-menu-item');
+    if (menuItem) {
+        menuItem.classList.add('active');
+    }
+}
+
+// 保存欄位設定到 localStorage
+function saveColumnSettings() {
+    const settings = {};
+    const checkboxes = document.querySelectorAll('#columnSettingsList input[type="checkbox"]');
+    
+    checkboxes.forEach(checkbox => {
+        const columnKey = checkbox.getAttribute('data-column-key');
+        const columnIndex = checkbox.getAttribute('data-column-index');
+        settings[columnKey] = {
+            index: parseInt(columnIndex),
+            visible: checkbox.checked
+        };
+    });
+    
+    localStorage.setItem('tableColumnSettings', JSON.stringify(settings));
+}
+
+// 載入欄位設定
+function loadColumnSettings() {
+    const saved = localStorage.getItem('tableColumnSettings');
+    if (!saved) return;
+    
+    try {
+        const settings = JSON.parse(saved);
+        const checkboxes = document.querySelectorAll('#columnSettingsList input[type="checkbox"]');
+        
+        checkboxes.forEach(checkbox => {
+            const columnKey = checkbox.getAttribute('data-column-key');
+            if (settings[columnKey]) {
+                checkbox.checked = settings[columnKey].visible;
+                // 立即應用設定
+                toggleColumnVisibility(checkbox);
+            }
+        });
+    } catch (e) {
+        console.error('Failed to load column settings:', e);
+    }
+}
+
+// 頁面載入時應用設定
+function applyColumnSettings() {
+    const saved = localStorage.getItem('tableColumnSettings');
+    if (!saved) return;
+    
+    try {
+        const settings = JSON.parse(saved);
+        const table = document.querySelector('table');
+        if (!table) return;
+        
+        Object.keys(settings).forEach(columnKey => {
+            const setting = settings[columnKey];
+            const columnIndex = setting.index;
+            const isVisible = setting.visible;
+            
+            // 隱藏/顯示表頭
+            const ths = table.querySelectorAll(`thead tr th:nth-child(${columnIndex + 1})`);
+            ths.forEach(th => {
+                th.style.display = isVisible ? '' : 'none';
+            });
+            
+            // 隱藏/顯示表體
+            const tds = table.querySelectorAll(`tbody tr td:nth-child(${columnIndex + 1})`);
+            tds.forEach(td => {
+                td.style.display = isVisible ? '' : 'none';
+            });
+        });
+    } catch (e) {
+        console.error('Failed to apply column settings:', e);
+    }
+}
+
 function toggleSidebar() {
     const appLayout = document.getElementById('appLayout');
     if (!appLayout) return;
-    appLayout.classList.toggle('collapsed');
+    
+    const isCollapsed = appLayout.classList.toggle('collapsed');
+    // 保存狀態到 localStorage
+    localStorage.setItem('sidebarCollapsed', isCollapsed ? 'true' : 'false');
 }
+
+// 頁面載入時恢復側邊欄狀態
+function restoreSidebarState() {
+    const appLayout = document.getElementById('appLayout');
+    if (!appLayout) return;
+    
+    const savedState = localStorage.getItem('sidebarCollapsed');
+    if (savedState === 'true') {
+        appLayout.classList.add('collapsed');
+    } else if (savedState === 'false') {
+        appLayout.classList.remove('collapsed');
+    }
+}
+
+// 頁面載入時執行
+document.addEventListener('DOMContentLoaded', function() {
+    restoreSidebarState();
+    // 應用表格欄位設定
+    setTimeout(() => {
+        applyColumnSettings();
+    }, 500);
+});
 
 // ==================== 主页：筛选 / 快速更新 / 新增订单 / 时间轴 ====================
 
@@ -306,8 +656,46 @@ let currentFilter = {
     substatus: 'all',   // 子状态筛选
     search: '',
     showCompleted: true,
-    showCancelled: false
+    showCancelled: false,
+    lights: {  // 燈號篩選：true 表示顯示，false 表示隱藏
+        red: true,
+        yellow: true,
+        green: true
+    }
 };
+
+// ==================== 狀態正規化（Key / 中文兼容）====================
+// 統一處理：數據庫可能存 key（如 'NEW_ORDER'）或中文（如 '新订单'）
+// 這個函數確保邏輯判斷時使用統一的格式
+function normalizeStatusForLogic(status) {
+    const s = (status || '').trim();
+    if (!s) return '';
+    
+    // 如果是 key（在 STATUS 中），直接返回
+    if (typeof STATUS !== 'undefined' && Object.values(STATUS).includes(s)) {
+        return s;
+    }
+    
+    // 如果是中文，嘗試找到對應的 key（向后兼容）
+    if (typeof STATUS !== 'undefined' && typeof STATUS_LABELS !== 'undefined') {
+        for (const [key, labels] of Object.entries(STATUS_LABELS)) {
+            if (labels.zh_cn === s || labels.zh_tw === s) {
+                return STATUS[key];  // 返回 key
+            }
+        }
+    }
+    
+    // 如果找不到對應的 key，可能是舊的中文狀態，嘗試繁簡轉換
+    if (typeof DISPLAY_MAP !== 'undefined') {
+        // DISPLAY_MAP: { 简体: 繁体 } → 反查繁体對應的简体
+        for (const [simp, trad] of Object.entries(DISPLAY_MAP)) {
+            if (trad === s) return simp;
+        }
+    }
+    
+    // 如果都找不到，返回原值（向后兼容）
+    return s;
+}
 
 // 阶段映射（用于动态生成阶段筛选按钮）- 统一使用 STATUS_SYSTEM.js
 // 等待 STATUS_SYSTEM.js 加载后初始化
@@ -356,7 +744,8 @@ function applyFilters() {
     rows.forEach(row => {
         const orderNumber = row.dataset.orderNumber || '';
         const customerName = row.dataset.customerName || '';
-        const status = row.dataset.status || '';
+        const statusRaw = row.dataset.status || '';
+        const status = normalizeStatusForLogic(statusRaw);
         const stageGroup = row.dataset.stageGroup || '';
         
         // Stage Group 篩選
@@ -408,25 +797,27 @@ function applyFilters() {
             }
         }
         
-        // 子状态筛选（需要将显示状态转换为简体进行比较）
+        // 子状态筛选（支持 key 和中文）
         let substatusMatch = true;
         if (currentFilter.substatus !== 'all') {
-            // currentFilter.substatus 可能是繁体，需要转换为简体比较
-            // 由于数据库存储的是简体，直接比较即可
-            // 如果 filterStatus 是繁体显示，需要反向查找简体
             const filterStatus = currentFilter.substatus;
-            // 检查是否是繁体，如果是则转换为简体
-            let filterStatusSimplified = filterStatus;
-            if (typeof DISPLAY_MAP !== 'undefined') {
-                // 反向查找：从繁体找到简体
-                for (const [simp, trad] of Object.entries(DISPLAY_MAP)) {
-                    if (trad === filterStatus) {
-                        filterStatusSimplified = simp;
+            // 正規化 filterStatus：如果是中文，轉換成 key
+            let filterStatusKey = filterStatus;
+            if (typeof STATUS_LABELS !== 'undefined') {
+                // 嘗試從中文找到對應的 key
+                for (const [key, labels] of Object.entries(STATUS_LABELS)) {
+                    if (labels.zh_cn === filterStatus || labels.zh_tw === filterStatus) {
+                        filterStatusKey = STATUS[key];
                         break;
                     }
                 }
             }
-            substatusMatch = status === filterStatusSimplified || status === filterStatus;
+            // 匹配：status 可能是 key 或中文，filterStatus 也可能是 key 或中文
+            substatusMatch = (
+                status === filterStatus ||  // 直接匹配
+                status === filterStatusKey ||  // status 是 key，filterStatus 是中文
+                normalizeStatusForLogic(status) === filterStatusKey  // status 是中文，轉換後匹配
+            );
         }
         
         // 已完成/已取消筛选（当选择了特定阶段时）
@@ -446,8 +837,16 @@ function applyFilters() {
                          customerName.toLowerCase().includes(search);
         }
         
+        // 燈號篩選
+        let lightMatch = true;
+        const light = row.dataset.light || '';
+        if (light && currentFilter.lights) {
+            // 如果該燈號被設為 false（灰色），則隱藏
+            lightMatch = currentFilter.lights[light] !== false;
+        }
+        
         // 显示或隐藏
-        if (stageGroupMatch && substatusMatch && completedMatch && searchMatch) {
+        if (stageGroupMatch && substatusMatch && completedMatch && searchMatch && lightMatch) {
             row.style.display = '';
             visibleCount++;
         } else {
@@ -631,6 +1030,34 @@ function filterByLight(light, event) {
     applyFilters();
 }
 
+// 切換燈號篩選（點擊按鈕切換亮/灰）
+function toggleLightFilter(light, button) {
+    if (!currentFilter.lights) {
+        currentFilter.lights = { red: true, yellow: true, green: true };
+    }
+    
+    // 切換該燈號的顯示狀態
+    const isActive = currentFilter.lights[light];
+    currentFilter.lights[light] = !isActive;
+    
+    // 更新按鈕樣式
+    if (button) {
+        if (currentFilter.lights[light]) {
+            button.classList.add('active');
+            button.classList.remove('inactive');
+        } else {
+            button.classList.remove('active');
+            button.classList.add('inactive');
+        }
+    }
+    
+    // 應用篩選
+    applyFilters();
+    
+    // 保存狀態到 localStorage
+    saveFilterState();
+}
+
 // 更新阶段筛选按钮
 function updateStageFilters(tab) {
     const stageBar = document.getElementById('stageFilterBar');
@@ -643,7 +1070,7 @@ function updateStageFilters(tab) {
         // 使用 STATUS 常量和 displayStatus 函数（与 STATUS_SYSTEM.js 保持一致）
         const quoteStatus = typeof STATUS !== 'undefined' ? STATUS.QUOTE_CONFIRMING : '报价待确认';
         const displayQuote = typeof displayStatus !== 'undefined' ? displayStatus(quoteStatus) : quoteStatus;
-        html += '<a href="#" class="filter-btn ' + (currentFilter.stage === quoteStatus ? 'active' : '') + '" data-stage="' + quoteStatus + '" onclick="filterByStage(\'' + quoteStatus + '\', event)">🎨 ' + displayQuote + '</a>';
+        html += '<a href="#" class="filter-btn ' + (currentFilter.stage === quoteStatus ? 'active' : '') + '" data-stage="' + quoteStatus + '" onclick="filterByStage(\'' + quoteStatus + '\', event)"> ' + displayQuote + '</a>';
     }
     if (tab === 'all' || tab === 'draft') {
         if (typeof STATUS !== 'undefined' && typeof displayStatus !== 'undefined') {
@@ -784,7 +1211,7 @@ function updateOrderNumber(oldOrderNumber, newOrderNumber, action, button = null
     .then(res => res.json())
     .then(data => {
         if (data.success) {
-            showToast('✅ 转换成功', `询价已转为订单 #${newOrderNumber}`);
+            showToast('转换成功', `询价已转为订单 #${newOrderNumber}`);
             setTimeout(() => location.reload(), 1000);
         } else {
             showToast('错误', '转换失败：' + data.error, 'error');
@@ -826,7 +1253,7 @@ function performQuickUpdate(orderNumber, action, current, next, date, notes, but
                 message += ` · ${notes}`;
             }
             message += ` · ${date}`;
-            showToast('✅ 更新成功', message);
+            showToast('更新成功', message);
             
             // 立即更新订单行（使用新的状态）
             const row = document.querySelector(`tr[data-order-number="${orderNumber}"]`);
@@ -884,7 +1311,7 @@ function showNewOrderModal() {
     
     // 设置提交按钮文本
     const submitBtn = document.getElementById('editOrderSubmitBtn');
-    if (submitBtn) submitBtn.textContent = '保存 💾';
+    if (submitBtn) submitBtn.textContent = '保存 ';
     
     // 清空表单
     const orderNumberInput = document.getElementById('editOrderNumber');
@@ -912,10 +1339,8 @@ function showNewOrderModal() {
     const today = new Date();
     document.getElementById('editOrderDate').value = today.toISOString().split('T')[0];
     
-    // 设置预计交货日期（30天后）
-    const deliveryDate = new Date();
-    deliveryDate.setDate(deliveryDate.getDate() + 30);
-    document.getElementById('editExpectedDeliveryDate').value = deliveryDate.toISOString().split('T')[0];
+    // 預計交貨日期留空（因為訂單確認後還有很多流程要走，此時無法確定）
+    document.getElementById('editExpectedDeliveryDate').value = '';
     
     // 获取下一个询价编号提示
     fetch('/tracking/api/orders/next-quote-number')
@@ -1115,7 +1540,7 @@ function addProduct() {
     newProduct.innerHTML = `
         <div class="product-item-header">
             <div class="product-item-title">产品 #${productCount}</div>
-            <button type="button" class="remove-product-btn" onclick="removeProduct(this)">✕ 移除</button>
+            <button type="button" class="remove-product-btn" onclick="removeProduct(this)">× 移除</button>
         </div>
         <div class="form-grid">
             <div class="form-group">
@@ -1183,7 +1608,7 @@ function checkOrderNumber() {
         .then(res => res.json())
         .then(data => {
             if (data.exists) {
-                errorDiv.textContent = '❌ ' + data.message;
+                errorDiv.textContent = '错误：' + data.message;
                 errorDiv.style.display = 'block';
             } else {
                 errorDiv.style.display = 'none';
@@ -1300,13 +1725,13 @@ function submitNewOrder() {
         .then(res => res.json())
         .then(result => {
             if (result.success) {
-                showToast('✅ 创建成功', `订单 ${result.message || '已创建'}`);
+                showToast('创建成功', `订单 ${result.message || '已创建'}`);
                 closeNewOrderModal();
                 setTimeout(() => location.reload(), 1500);
             } else {
                 if (result.error && result.error.includes('已存在')) {
                     if (errorDiv) {
-                        errorDiv.textContent = '❌ ' + result.error;
+                        errorDiv.textContent = '错误：' + result.error;
                         errorDiv.style.display = 'block';
                     }
                     currentOrderStep = 1;
@@ -1327,7 +1752,7 @@ function submitNewOrder() {
             .then(data => {
                 if (data.exists) {
                     if (errorDiv) {
-                        errorDiv.textContent = '❌ ' + data.message;
+                        errorDiv.textContent = '错误：' + data.message;
                         errorDiv.style.display = 'block';
                     }
                     currentOrderStep = 1;
@@ -1375,7 +1800,7 @@ function toggleDetail(orderNumber, event) {
     detailRow.innerHTML = `
         <td colspan="${colSpan}">
             <div class="detail-content" id="detail-content-${orderNumber}">
-                <div class="timeline-title">📊 載入中...</div>
+                <div class="timeline-title"> 載入中...</div>
             </div>
         </td>
     `;
@@ -1392,7 +1817,7 @@ function toggleDetail(orderNumber, event) {
         .then(result => {
             if (!result.success) {
                 document.getElementById(`detail-content-${orderNumber}`).innerHTML =
-                    `<div class="timeline-title">❌ 載入失敗：${result.error || '未知錯誤'}</div>`;
+                    `<div class="timeline-title">错误：載入失敗：${result.error || '未知錯誤'}</div>`;
                 return;
             }
             orderDetailCache[orderNumber] = result.data;
@@ -1400,7 +1825,7 @@ function toggleDetail(orderNumber, event) {
         })
         .catch(err => {
             document.getElementById(`detail-content-${orderNumber}`).innerHTML =
-                `<div class="timeline-title">❌ 載入失敗：${err.message}</div>`;
+                `<div class="timeline-title">错误：載入失敗：${err.message}</div>`;
         });
 }
 
@@ -1440,9 +1865,9 @@ function renderOrderTimeline(orderNumber, orderData) {
     const lastDate = parseDate(lastHistoryItem?.action_date);
     const currentStatusDays = lastDate ? diffDays(lastDate, today) : 0;
 
-    // 折叠配置：如果超过10条记录，默认只显示最近的5条
+    // 折叠配置：如果超过5条记录，默认只显示最近的5条
     const MAX_VISIBLE_DEFAULT = 5;
-    const TOTAL_THRESHOLD = 10;
+    const TOTAL_THRESHOLD = 5;
     const shouldCollapse = history.length > TOTAL_THRESHOLD;
     const visibleCount = shouldCollapse ? MAX_VISIBLE_DEFAULT : history.length;
     const hiddenCount = history.length - visibleCount;
@@ -1458,7 +1883,7 @@ function renderOrderTimeline(orderNumber, orderData) {
         const toDate = isLast ? today : parseDate(history[index + 1].action_date);
         const stayDays = diffDays(fromDate, toDate);
         
-        const icon = isLast ? '⏱️' : '✓';
+        const icon = isLast ? '' : '✓';
         const stepClass = isLast ? 'current' : 'completed';
         
         let durationText = '';
@@ -1471,7 +1896,7 @@ function renderOrderTimeline(orderNumber, orderData) {
             } else {
                 durationText = `已等 ${currentStatusDays}天`;
                 if (currentStatusDays > 7) {
-                    durationText += ' ⚠️';
+                    durationText += ' WARNING';
                     durationClass = 'danger';
                 }
             }
@@ -1538,7 +1963,7 @@ function renderOrderTimeline(orderNumber, orderData) {
     container.innerHTML = `
         <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
             <button class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="openDetailDrawerFromTimeline('${orderNumber}', '${orderData.customer_name || ''}', ${currentStatusDays}); event.stopPropagation();">
-                📋 查看完整记录与操作
+                 查看完整记录与操作
             </button>
             ${toggleButtonHtml}
         </div>
@@ -1639,7 +2064,7 @@ function showActionModal(action, from, to, orderId) {
         confirmBtn.textContent = '✓ 确认完成';
         confirmBtn.className = 'modal-btn confirm';
     } else if (action === 'skip') {
-        title.textContent = '⚠️ 确认跳过打样阶段';
+        title.textContent = '警告：确认跳过打样阶段';
         info.textContent = `将直接从当前阶段进入生产阶段`;
         confirmBtn.textContent = '✓ 确认跳过';
         confirmBtn.className = 'modal-btn confirm';
@@ -1838,17 +2263,18 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==================== 撤销最后一步功能 ====================
 
 async function undoLastStep(orderNumber, restoreStatus, currentStatus) {
-    // 确认对话框
+    // 使用状态转换样式显示（和确认下一步骤一样）
     const confirmed = await showConfirmModal(
-        `⚠️ 确认撤销操作？\n\n` +
-        `订单：${orderNumber}\n` +
-        `当前状态：${currentStatus}\n` +
-        `将恢复到：${restoreStatus}\n\n` +
-        `此操作会永久删除最后一步记录！`,
+        '', // 消息留空，因为用状态转换区域显示
         '确认撤销',
         '确认撤销',
         '取消',
-        true
+        true,
+        {
+            currentStatus: currentStatus,
+            nextStatus: restoreStatus,
+            orderNumber: orderNumber
+        }
     );
     
     if (!confirmed) return;
@@ -1867,7 +2293,7 @@ async function undoLastStep(orderNumber, restoreStatus, currentStatus) {
         
         if (result.success) {
             if (typeof showToast === 'function') {
-                showToast('✅ 撤销成功', result.message);
+                showToast('撤销成功', result.message);
             } else {
                 showToast('成功', result.message, 'success');
             }
@@ -1908,7 +2334,7 @@ function confirmDeleteOrderFromMenu() {
     const statusCell = orderRow.querySelector('td:nth-child(5)');
     
     const customerName = customerCell ? customerCell.textContent.trim() : '未知客户';
-    const currentStatus = statusCell ? statusCell.textContent.trim().replace(/🔴|🟡|🟢/g, '').trim() : '未知状态';
+    const currentStatus = statusCell ? statusCell.textContent.trim().replace(/||/g, '').trim() : '未知状态';
     
     // 调用删除确认
     confirmDeleteOrder(orderNumber, customerName, currentStatus);
@@ -1920,11 +2346,11 @@ function confirmDeleteOrderFromMenu() {
 async function confirmDeleteOrder(orderNumber, customerName, currentStatus) {
     // 第一步：基本确认
     const confirmed = await showConfirmModal(
-        `⚠️ 确认删除订单？\n\n` +
+        `警告：确认删除订单？\n\n` +
         `订单号：${orderNumber}\n` +
         `客户：${customerName}\n` +
         `状态：${currentStatus}\n\n` +
-        `⚠️ 此操作会永久删除订单！\n` +
+        `警告：此操作会永久删除订单！\n` +
         `• 删除订单记录\n` +
         `• 删除所有状态历史\n` +
         `• 删除所有备注\n` +
@@ -1936,7 +2362,7 @@ async function confirmDeleteOrder(orderNumber, customerName, currentStatus) {
     
     // 第二步：输入订单号确认
     const confirmInput = prompt(
-        `⚠️ 最后确认\n\n` +
+        `警告：最后确认\n\n` +
         `为防止误操作，请输入订单号确认删除：\n` +
         `${orderNumber}`
     );
@@ -1973,7 +2399,7 @@ async function deleteOrder(orderNumber, reason) {
         
         if (result.success) {
             if (typeof showToast === 'function') {
-                showToast('✅ 删除成功', result.message);
+                showToast('删除成功', result.message);
             } else {
                 showToast('成功', result.message, 'success');
             }
@@ -2004,9 +2430,9 @@ function renderProcessTimeline() {
     
     if (!orderHistory || orderHistory.length === 0) return;
     
-    // 折叠配置：如果超过10条记录，默认只显示最近的5条
+    // 折叠配置：如果超过5条记录，默认只显示最近的5条
     const MAX_VISIBLE_DEFAULT = 5;
-    const TOTAL_THRESHOLD = 10;
+    const TOTAL_THRESHOLD = 5;
     const shouldCollapse = orderHistory.length > TOTAL_THRESHOLD;
     const visibleCount = shouldCollapse ? MAX_VISIBLE_DEFAULT : orderHistory.length;
     const hiddenCount = orderHistory.length - visibleCount;
@@ -2044,7 +2470,7 @@ function renderProcessTimeline() {
         const toDate = isLast ? today : parseDate(orderHistory[index + 1] ? orderHistory[index + 1].action_date : null);
         const stayDays = diffDays(fromDate, toDate);
         
-        const icon = isCurrent ? '⏱️' : (isCompleted ? '✓' : '⬜');
+        const icon = isCurrent ? '' : (isCompleted ? '✓' : '⬜');
         const stepClass = isCurrent ? 'current' : (isCompleted ? 'completed' : '');
         
         const statusIcon = getStatusIcon(item.to_status);
@@ -2156,7 +2582,7 @@ function renderDrawerTimeline() {
                 </div>
                 <div class="drawer-step-meta">
                     <div class="meta-item ${isLast ? 'duration' : ''}">
-                        <span>⏱️</span>
+                        <span></span>
                         <span>${isLast ? (currentStatusDays < 0 ? `已超時 ${Math.abs(currentStatusDays)} 天` : `已等 ${currentStatusDays} 天`) : (stayDays !== null ? `停留 ${stayDays} 天` : '停留时间不明')}</span>
                     </div>
                     ${item.operator ? `
@@ -2187,8 +2613,8 @@ function renderDrawerTimeline() {
                         <textarea class="form-textarea" id="editNote${index}">${item.notes || ''}</textarea>
                     </div>
                     <div class="form-actions">
-                        <button class="form-btn save" onclick="saveEdit(${index})">💾 保存</button>
-                        <button class="form-btn cancel" onclick="cancelEdit(${index})">✕ 取消</button>
+                        <button class="form-btn save" onclick="saveEdit(${index})"> 保存</button>
+                        <button class="form-btn cancel" onclick="cancelEdit(${index})">× 取消</button>
                     </div>
                 </div>
             </div>
@@ -2321,8 +2747,48 @@ function openDetailDrawer() {
     if (!orderDataEl) return;
     
     const data = JSON.parse(orderDataEl.textContent);
-    document.getElementById('drawerOrderNumber').textContent = `#${data.orderNumber}`;
-    document.getElementById('drawerCustomerName').textContent = data.customerName;
+    document.getElementById('drawerOrderNumber').textContent = data.orderNumber || '-';
+    document.getElementById('drawerCustomerName').textContent = data.customerName || '-';
+    
+    // 顯示預計交貨日期
+    const expectedDeliveryEl = document.getElementById('drawerExpectedDelivery');
+    const expectedDeliveryDateEl = document.getElementById('drawerExpectedDeliveryDate');
+    if (expectedDeliveryEl && expectedDeliveryDateEl) {
+        if (data.expected_delivery_date) {
+            expectedDeliveryDateEl.textContent = data.expected_delivery_date;
+            expectedDeliveryEl.style.display = 'block';
+        } else {
+            expectedDeliveryEl.style.display = 'none';
+        }
+    }
+    
+    // 顯示訂單備註
+    const orderNotesEl = document.getElementById('drawerOrderNotes');
+    const orderNotesContentEl = document.getElementById('drawerOrderNotesContent');
+    if (orderNotesEl) {
+        orderNotesEl.dataset.orderNumber = data.orderNumber || '';
+        if (orderNotesContentEl) {
+            if (data.notes && data.notes.trim()) {
+                orderNotesContentEl.textContent = data.notes;
+                orderNotesEl.style.display = 'flex';
+            } else {
+                orderNotesContentEl.textContent = '-';
+                orderNotesEl.style.display = 'flex';
+            }
+        }
+    }
+    
+    // 计算总耗时（从第一个状态到现在）
+    if (data.history && data.history.length > 0) {
+        const firstDate = data.history[0].action_date;
+        const today = new Date().toISOString().split('T')[0];
+        const totalDays = firstDate ? diffDaysUTC(firstDate, today) : 0;
+        
+        const totalDaysEl = document.getElementById('drawerTotalDays');
+        if (totalDaysEl) {
+            totalDaysEl.textContent = `${totalDays} 天`;
+        }
+    }
     
     renderDrawerTimelineWithData(data.history, data.orderNumber, data.customerName, data.statusDays);
     
@@ -2331,9 +2797,8 @@ function openDetailDrawer() {
 }
 
 async function openDetailDrawerFromTimeline(orderNumber, customerName, statusDays) {
-    document.getElementById('drawerOrderNumber').textContent = `#${orderNumber}`;
-    document.getElementById('drawerCustomerName').textContent = customerName;
-    document.getElementById('drawerTotalDays').textContent = '加载中...';
+    document.getElementById('drawerOrderNumber').textContent = orderNumber || '-';
+    document.getElementById('drawerCustomerName').textContent = customerName || '-';
     
     document.getElementById('detailDrawerOverlay').classList.add('show');
     document.getElementById('detailDrawer').classList.add('show');
@@ -2345,15 +2810,82 @@ async function openDetailDrawerFromTimeline(orderNumber, customerName, statusDay
         const res = await fetch(`/tracking/api/orders/${encodeURIComponent(orderNumber)}`);
         if (!res.ok) throw new Error('Failed');
         const data = await res.json();
-        if (data.success && data.data && data.data.history) {
-            renderDrawerTimelineWithData(data.data.history, orderNumber, customerName, statusDays);
+        if (data.success && data.data) {
+            // 计算总耗时
+            if (data.data.history && data.data.history.length > 0) {
+                const firstDate = data.data.history[0].action_date;
+                const today = new Date().toISOString().split('T')[0];
+                const totalDays = firstDate ? diffDaysUTC(firstDate, today) : 0;
+                
+                const totalDaysEl = document.getElementById('drawerTotalDays');
+                if (totalDaysEl) {
+                    totalDaysEl.textContent = `${totalDays} 天`;
+                }
+            }
+            
+            // 顯示預計交貨日期
+            const expectedDeliveryEl = document.getElementById('drawerExpectedDelivery');
+            const expectedDeliveryDateEl = document.getElementById('drawerExpectedDeliveryDate');
+            if (expectedDeliveryEl && expectedDeliveryDateEl) {
+                if (data.data.expected_delivery_date) {
+                    expectedDeliveryDateEl.textContent = data.data.expected_delivery_date;
+                    expectedDeliveryEl.style.display = 'block';
+                } else {
+                    expectedDeliveryEl.style.display = 'none';
+                }
+            }
+            
+            // 顯示訂單備註
+            const orderNotesEl = document.getElementById('drawerOrderNotes');
+            const orderNotesContentEl = document.getElementById('drawerOrderNotesContent');
+            if (orderNotesEl) {
+                orderNotesEl.dataset.orderNumber = orderNumber || '';
+                if (orderNotesContentEl) {
+                    if (data.data.notes && data.data.notes.trim()) {
+                        orderNotesContentEl.textContent = data.data.notes;
+                        orderNotesEl.style.display = 'flex';
+                    } else {
+                        orderNotesContentEl.textContent = '-';
+                        orderNotesEl.style.display = 'flex';
+                    }
+                }
+            }
+            
+            if (data.data.history) {
+                renderDrawerTimelineWithData(data.data.history, orderNumber, customerName, statusDays);
+            } else {
+                container.innerHTML = '<div class="empty-state">暂无历史记录</div>';
+            }
         } else {
-            container.innerHTML = '<div class="empty-state">❌ 加载失败</div>';
+            container.innerHTML = '<div class="empty-state">错误：加载失败</div>';
         }
     } catch (err) {
         console.error('加载订单历史失败:', err);
-        container.innerHTML = '<div class="empty-state">❌ 网络错误</div>';
+        container.innerHTML = '<div class="empty-state">错误：网络错误</div>';
     }
+}
+
+/**
+ * 從表格中的「⋯ 详情」按鈕開啟右側抽屜
+ * 避免在 HTML 裡直接寫一大串 JS + Jinja，降低 IDE 語法誤判
+ */
+function openDetailDrawerFromRow(buttonEl) {
+    if (!buttonEl) return;
+    const row = buttonEl.closest('tr[data-order-number]');
+    if (!row) return;
+
+    const orderNumber = row.dataset.orderNumber || '';
+    const customerName = row.dataset.customerName || '';
+
+    // 從該行的等待天數文字中抓數字（例如「5天」→ 5）
+    let statusDays = 0;
+    const daysEl = row.querySelector('.days');
+    if (daysEl) {
+        const m = daysEl.textContent.match(/-?\d+/);
+        if (m) statusDays = parseInt(m[0], 10) || 0;
+    }
+
+    openDetailDrawerFromTimeline(orderNumber, customerName, statusDays);
 }
 
 function closeDetailDrawer() {
@@ -2368,9 +2900,9 @@ function renderDrawerTimelineWithData(history, orderNumber, customerName, curren
         return;
     }
     
-    // 折叠配置：如果超过10条记录，默认只显示最近的5条
+    // 折叠配置：如果超过5条记录，默认只显示最近的5条
     const MAX_VISIBLE_DEFAULT = 5;
-    const TOTAL_THRESHOLD = 10;
+    const TOTAL_THRESHOLD = 5;
     const shouldCollapse = history.length > TOTAL_THRESHOLD;
     const visibleCount = shouldCollapse ? MAX_VISIBLE_DEFAULT : history.length;
     const hiddenCount = history.length - visibleCount;
@@ -2397,19 +2929,24 @@ function renderDrawerTimelineWithData(history, orderNumber, customerName, curren
                 const safeCurrentStatus = String(currentStatus).replace(/'/g, "\\'");
                 const safeNextStatus = String(action.next || '').replace(/'/g, "\\'");
                 
+                // 抽屜內的快速操作按鈕：統一使用和「編輯訂單」一樣的次要樣式
                 actionsHTML += `
-                    <button class="drawer-action-btn btn-${action.color}" 
+                    <button class="drawer-action-btn btn-secondary" 
                             onclick="handleQuickAction('${safeOrderNumber}', '${safeAction}', '${safeCurrentStatus}', '${safeNextStatus}', event)">
                         ${action.label}
                     </button>
                 `;
             });
             
-            // 添加「跳过阶段」按钮
+            // 「跳過階段」也使用相同的按鈕樣式，保持簡約
             actionsHTML += `
-                <button class="drawer-action-btn btn-warning" 
+                <button class="drawer-action-btn btn-secondary" 
                         onclick="showSkipStageModal('${String(orderNumber).replace(/'/g, "\\'")}', '${String(currentStatus).replace(/'/g, "\\'")}')">
-                    ⚡ 跳过阶段
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="13 17 18 12 13 7"></polyline>
+                        <polyline points="6 17 11 12 6 7"></polyline>
+                    </svg>
+                    跳过阶段
                 </button>
             `;
         }
@@ -2429,6 +2966,16 @@ function renderDrawerTimelineWithData(history, orderNumber, customerName, curren
     if (managementSection) {
         if (currentStatus !== STATUS.CANCELLED) {
             managementSection.style.display = 'block';
+            
+            // 如果狀態是已完成，隱藏「取消訂單」按鈕
+            const cancelButton = managementSection.querySelector('button[onclick*="cancelOrderFromDrawer"]');
+            if (cancelButton) {
+                if (currentStatus === STATUS.COMPLETED) {
+                    cancelButton.style.display = 'none';
+                } else {
+                    cancelButton.style.display = '';
+                }
+            }
         } else {
             managementSection.style.display = 'none';
         }
@@ -2483,44 +3030,77 @@ function renderDrawerTimelineWithData(history, orderNumber, customerName, curren
         // 重新計算當前狀態的實際天數（不使用後端的currentStatusDays）
         const actualCurrentDays = isLast && from ? diffDays(from, today) : null;
         
+        // 撤销逻辑：只能撤销最后一步（当前步骤）
         let prevStatus = null, canUndo = false;
         if (isLast && i > 0) {
             prevStatus = history[i-1].to_status;
-            canUndo = true; // 只要不是第一步就能撤銷
+            canUndo = true; // 只有最后一步才能撤销
         }
         
         const cls = isLast ? 'current' : 'completed';
         const icon = getStatusIcon(item.to_status);
         
-        html += `<div class="drawer-step ${cls}">
-            <div class="drawer-step-dot"></div>
-            <div class="drawer-step-header">
-                <div class="drawer-step-name">${icon} ${displayStatus(item.to_status)}</div>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <div class="drawer-step-date">${formatDate(item.action_date)}</div>
-                    <button class="action-btn edit" onclick="toggleEditDrawer(this,${i})" title="编辑">✏️</button>
-                    ${canUndo && prevStatus && isAdmin ? `<button class="action-btn undo" onclick="undoLastStepFromDrawer('${orderNumber}','${prevStatus}','${item.to_status}')" title="撤销">↩️</button>` : ''}
+        if (isLast) {
+            // 当前步骤 - 显示为卡片，也有编辑和撤销按钮
+            // 只有非最終狀態（已完成、已取消）才顯示「進行中」標籤
+            const statusTag = (item.to_status !== STATUS.COMPLETED && item.to_status !== STATUS.CANCELLED) 
+                ? '<span class="drawer-step-status-tag">進行中</span>' 
+                : '';
+            html += `<div class="drawer-step ${cls}">
+                <div class="drawer-step-icon-wrapper">${icon}</div>
+                <div class="drawer-step-content">
+                    <div class="drawer-step-header">
+                        <div class="drawer-step-name">${displayStatus(item.to_status)}${statusTag}</div>
+                    <div class="drawer-step-meta">
+                        ${item.operator ? `<span>${item.operator}</span>` : ''}
+                        <span class="drawer-step-date">${formatDate(item.action_date)}</span>
+                        <button class="action-btn edit" onclick="toggleEditDrawer(this,${i})" title="编辑">编辑</button>
+                        ${canUndo && prevStatus && isAdmin ? `<button class="action-btn undo" onclick="undoLastStepFromDrawer('${orderNumber}','${prevStatus}','${item.to_status}')" title="撤销">撤销</button>` : ''}
+                    </div>
+                    </div>
+                    ${item.notes ? `<div class="drawer-step-description">${item.notes}</div>` : ''}
+                    <div class="drawer-step-duration">
+                        <span class="drawer-step-duration-icon"></span>
+                        <span>当前步骤已进行 ${actualCurrentDays} 天</span>
+                    </div>
+                    <div class="edit-form" id="editFormDrawer${i}">
+                        <div class="form-group"><label class="form-label">日期</label><input type="date" class="form-input" value="${item.action_date}" id="editDateDrawer${i}"></div>
+                        <div class="form-group"><label class="form-label">备注</label><textarea class="form-textarea" id="editNoteDrawer${i}">${item.notes||''}</textarea></div>
+                        <div class="form-actions">
+                            <button class="form-btn save" onclick="saveEditDrawer(${i}, '${orderNumber}', ${item.id})">保存</button>
+                            <button class="form-btn cancel" onclick="cancelEditDrawer(${i})">取消</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="drawer-step-meta">
-                ${i > 0 || isLast ? `
-                <div class="meta-item ${isLast?'duration':''}">
-                    <span>⏱️</span>
-                    <span>${isLast ? `已等 ${actualCurrentDays} 天` : (days !== null ? `停留 ${days} 天` : '時間不明')}</span>
+            </div>`;
+        } else {
+            // 已完成步骤 - 简单显示（不显示撤销按钮）
+            html += `<div class="drawer-step ${cls}">
+                <div class="drawer-step-icon-wrapper">${icon}</div>
+                <div class="drawer-step-content">
+                    <div class="drawer-step-header">
+                    <div class="drawer-step-name">
+                        ${displayStatus(item.to_status)}
+                        <span class="drawer-step-checkmark"></span>
+                    </div>
+                    <div class="drawer-step-meta">
+                        ${item.operator ? `<span>${item.operator}</span>` : ''}
+                        <span class="drawer-step-date">${formatDate(item.action_date)}</span>
+                        <button class="action-btn edit" onclick="toggleEditDrawer(this,${i})" title="编辑">编辑</button>
+                        </div>
+                    </div>
+                    ${item.notes ? `<div class="drawer-step-note">${item.notes}</div>` : ''}
+                    <div class="edit-form" id="editFormDrawer${i}">
+                        <div class="form-group"><label class="form-label">日期</label><input type="date" class="form-input" value="${item.action_date}" id="editDateDrawer${i}"></div>
+                        <div class="form-group"><label class="form-label">备注</label><textarea class="form-textarea" id="editNoteDrawer${i}">${item.notes||''}</textarea></div>
+                        <div class="form-actions">
+                            <button class="form-btn save" onclick="saveEditDrawer(${i}, '${orderNumber}', ${item.id})">保存</button>
+                            <button class="form-btn cancel" onclick="cancelEditDrawer(${i})">取消</button>
+                        </div>
+                    </div>
                 </div>
-                ` : ''}
-                ${item.operator ? `<div class="meta-item"><span>👤</span><span>${item.operator}</span></div>` : ''}
-            </div>
-            ${item.notes ? `<div class="drawer-step-note">${item.notes}</div>` : ''}
-            <div class="edit-form" id="editFormDrawer${i}">
-                <div class="form-group"><label class="form-label">日期</label><input type="date" class="form-input" value="${item.action_date}" id="editDateDrawer${i}"></div>
-                <div class="form-group"><label class="form-label">备注</label><textarea class="form-textarea" id="editNoteDrawer${i}">${item.notes||''}</textarea></div>
-                <div class="form-actions">
-                    <button class="form-btn save" onclick="saveEditDrawer(${i}, '${orderNumber}', ${item.id})">💾 保存</button>
-                    <button class="form-btn cancel" onclick="cancelEditDrawer(${i})">✕ 取消</button>
-                </div>
-            </div>
-        </div>`;
+            </div>`;
+        }
     });
     
     // 如果已展开，添加折叠按钮（显示在最后一条记录下方）
@@ -2539,8 +3119,6 @@ function renderDrawerTimelineWithData(history, orderNumber, customerName, curren
     }
     
     container.innerHTML = html;
-    const el = document.getElementById('drawerTotalDays');
-    if (el) el.textContent = `${totalDays} 天`;
     
     // 保存完整历史数据到容器，以便展开时使用
     container.dataset.fullHistory = JSON.stringify(history);
@@ -2600,17 +3178,33 @@ function saveEditDrawer(i, orderNumber, historyId) {
         if (data.success) {
             showToast('保存成功', '备注和日期已更新');
             cancelEditDrawer(i);
-            const customerName = document.getElementById('drawerCustomerName').textContent;
-            openDetailDrawerFromTimeline(orderNumber, customerName, 0);
             
-            const detailContent = document.getElementById(`detail-content-${orderNumber}`);
-            if (detailContent) {
+            // 重新獲取訂單數據，更新主表格和抽屜
                 fetch(`/tracking/api/orders/${orderNumber}`)
                     .then(res => res.json())
                     .then(result => {
-                        if (result.success) renderOrderTimeline(orderNumber, result.data);
-                    });
-            }
+                    if (result.success) {
+                        // 更新主表格
+                        if (typeof updateOrderRowAfterUpdate === 'function') {
+                            updateOrderRowAfterUpdate(orderNumber, result.data);
+                        }
+                        
+                        // 更新篩選計數
+                        if (typeof updateFilterCounts === 'function') {
+                            updateFilterCounts();
+                        }
+                        
+                        // 更新抽屜
+                        const customerName = document.getElementById('drawerCustomerName').textContent;
+                        openDetailDrawerFromTimeline(orderNumber, customerName, 0);
+                        
+                        // 更新嵌入式時間軸（如果存在）
+                        const detailContent = document.getElementById(`detail-content-${orderNumber}`);
+                        if (detailContent && typeof renderOrderTimeline === 'function') {
+                            renderOrderTimeline(orderNumber, result.data);
+                        }
+                    }
+                });
         } else {
             showToast('保存失败', data.error || '操作失败', 'error');
         }
@@ -2629,7 +3223,19 @@ function cancelEditDrawer(i) {
 }
 
 async function undoLastStepFromDrawer(orderNumber, previousStatus, currentStatus) {
-    const confirmed = await showConfirmModal(`确认要撤销「${currentStatus}」，回到「${previousStatus}」？`, '确认撤销', '确认撤销', '取消', true);
+    // 使用状态转换样式显示（和确认下一步骤一样）
+    const confirmed = await showConfirmModal(
+        '', // 消息留空，因为用状态转换区域显示
+        '确认撤销',
+        '确认撤销',
+        '取消',
+        true,
+        {
+            currentStatus: currentStatus,
+            nextStatus: previousStatus,
+            orderNumber: orderNumber
+        }
+    );
     if (!confirmed) return;
     
     fetch(`/tracking/api/orders/${orderNumber}/undo-last-step`, {
@@ -2858,10 +3464,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 /**
- * 从抽屉编辑订单（使用 Modal）
+ * 从表格行编辑订单（使用 Modal）
  */
-function editOrderFromDrawer() {
-    const orderNumber = document.getElementById('drawerOrderNumber').textContent.replace('#', '').trim();
+function editOrderFromTable(orderNumber) {
     if (!orderNumber) {
         showToast('错误', '无法获取订单号');
         return;
@@ -2872,7 +3477,7 @@ function editOrderFromDrawer() {
         .then(res => res.json())
         .then(result => {
             if (result.success && result.data) {
-                const order = result.data; // 注意：API 返回 result.data 直接是订单对象
+                const order = result.data;
                 
                 // 设置标题
                 const title = document.getElementById('editOrderModalTitle');
@@ -2880,11 +3485,10 @@ function editOrderFromDrawer() {
                 
                 // 设置提交按钮文本
                 const submitBtn = document.getElementById('editOrderSubmitBtn');
-                if (submitBtn) submitBtn.textContent = '保存修改 💾';
+                if (submitBtn) submitBtn.textContent = '保存修改 ';
                 
                 // 填充表单
                 const orderNumberInput = document.getElementById('editOrderNumber');
-                const orderNumber = order.order_number || '';
                 orderNumberInput.value = orderNumber;
                 orderNumberInput.readOnly = true;
                 orderNumberInput.style.background = '#f3f4f6';
@@ -2899,7 +3503,7 @@ function editOrderFromDrawer() {
                 document.getElementById('editProductionType').value = order.production_type || '';
                 document.getElementById('editNotes').value = order.notes || '';
                 
-                // 显示"修改订单号"按钮（所有订单都可以修改订单号）
+                // 显示"修改订单号"按钮
                 const toggleBtn = document.getElementById('toggleOrderNumberEdit');
                 const warning = document.getElementById('editOrderNumberWarning');
                 const errorDiv = document.getElementById('editOrderNumberError');
@@ -2907,7 +3511,7 @@ function editOrderFromDrawer() {
                 if (warning) warning.style.display = 'none';
                 if (errorDiv) errorDiv.style.display = 'none';
                 
-                // 添加订单号输入监听（编辑模式，仅在解锁时验证）
+                // 添加订单号输入监听
                 setupOrderNumberValidation(orderNumberInput, false);
                 
                 // 隐藏提示
@@ -2921,14 +3525,374 @@ function editOrderFromDrawer() {
                     modal.setAttribute('data-mode', 'edit');
                 }
             } else {
-                showToast('错误', '无法加载订单数据', 'error');
-                console.error('API 返回错误:', result);
+                showToast('错误', result.error || '无法获取订单数据');
             }
         })
         .catch(err => {
-            console.error('加载订单数据失败:', err);
-            showToast('错误', '网络错误', 'error');
+            console.error('Error fetching order:', err);
+            showToast('错误', '获取订单数据失败');
         });
+}
+
+/**
+ * 从抽屉编辑订单（使用 Modal）
+ */
+function editOrderFromDrawer() {
+    const drawerTimeline = document.getElementById('drawerTimeline');
+    const orderNumber = drawerTimeline ? drawerTimeline.dataset.orderNumber : null;
+    if (!orderNumber) {
+        showToast('错误', '无法获取订单号');
+        return;
+    }
+    
+    // 调用通用函数
+    editOrderFromTable(orderNumber);
+}
+
+/**
+ * 内联编辑备注功能
+ */
+function toggleNotesEdit(orderNumber, buttonEl) {
+    const notesCell = buttonEl.closest('.order-notes');
+    if (!notesCell) return;
+    
+    const displayDiv = notesCell.querySelector('.notes-display');
+    const editDiv = notesCell.querySelector('.notes-edit');
+    const textarea = editDiv.querySelector('.notes-input');
+    
+    if (editDiv.style.display === 'none') {
+        // 切换到编辑模式
+        displayDiv.style.display = 'none';
+        editDiv.style.display = 'block';
+        
+        // 设置初始值
+        const preview = displayDiv.querySelector('.notes-preview');
+        if (preview && preview.title) {
+            textarea.value = preview.title;
+        } else {
+            textarea.value = '';
+        }
+        
+        // 聚焦并选中
+        setTimeout(() => {
+            textarea.focus();
+            textarea.select();
+        }, 10);
+        
+        // 添加回车键保存（Ctrl+Enter 或 Cmd+Enter）
+        textarea.onkeydown = function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                const saveBtn = editDiv.querySelector('.notes-save-btn');
+                if (saveBtn && !saveBtn.disabled) {
+                    saveNotes(orderNumber, saveBtn);
+                }
+            }
+            // ESC 取消
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                const cancelBtn = editDiv.querySelector('.notes-cancel-btn');
+                if (cancelBtn) {
+                    cancelNotesEdit(orderNumber, cancelBtn);
+                }
+            }
+        };
+    } else {
+        // 切换到显示模式
+        editDiv.style.display = 'none';
+        displayDiv.style.display = 'block';
+    }
+}
+
+function saveNotes(orderNumber, buttonEl) {
+    const notesCell = buttonEl.closest('.order-notes');
+    if (!notesCell) return;
+    
+    const textarea = notesCell.querySelector('.notes-input');
+    const notes = textarea.value.trim();
+    const displayDiv = notesCell.querySelector('.notes-display');
+    const editDiv = notesCell.querySelector('.notes-edit');
+    
+    // 禁用按钮，显示加载状态
+    buttonEl.disabled = true;
+    buttonEl.textContent = '保存中...';
+    
+    // 调用 API 更新备注
+    fetch(`/tracking/api/orders/${encodeURIComponent(orderNumber)}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            notes: notes
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // 更新显示内容
+            if (notes) {
+                const displayText = notes.length > 30 ? notes.substring(0, 30) + '...' : notes;
+                // 转义 HTML 特殊字符
+                const escapedNotes = notes.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                const escapedDisplay = displayText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                displayDiv.innerHTML = `<span class="notes-preview" title="${escapedNotes}">${escapedDisplay}</span>`;
+            } else {
+                displayDiv.innerHTML = '<span class="notes-empty">-</span>';
+            }
+            
+            // 恢复按钮状态
+            buttonEl.disabled = false;
+            buttonEl.textContent = '保存';
+            
+            // 切换回显示模式（隐藏编辑区域，显示显示区域）
+            editDiv.style.display = 'none';
+            displayDiv.style.display = 'block';
+            
+            // 更新 data-status 属性（如果有的话）
+            const row = notesCell.closest('tr');
+            if (row) {
+                row.dataset.notes = notes;
+            }
+            
+            // 同步更新右侧抽屉的备注显示（如果抽屉是打开的）
+            updateDrawerNotesAfterSave(orderNumber, notes);
+            
+            showToast('成功', '備註已保存');
+        } else {
+            showToast('错误', data.error || '保存失敗');
+            buttonEl.disabled = false;
+            buttonEl.textContent = '保存';
+        }
+    })
+    .catch(err => {
+        console.error('Error saving notes:', err);
+        showToast('错误', '網絡錯誤');
+        buttonEl.disabled = false;
+        buttonEl.textContent = '保存';
+    });
+}
+
+function cancelNotesEdit(orderNumber, buttonEl) {
+    const notesCell = buttonEl.closest('.order-notes');
+    if (!notesCell) return;
+    
+    const displayDiv = notesCell.querySelector('.notes-display');
+    const editDiv = notesCell.querySelector('.notes-edit');
+    const textarea = editDiv.querySelector('.notes-input');
+    const saveBtn = editDiv.querySelector('.notes-save-btn');
+    
+    // 恢复原始值（从显示内容恢复）
+    const preview = displayDiv.querySelector('.notes-preview');
+    if (preview && preview.title) {
+        textarea.value = preview.title;
+    } else {
+        textarea.value = '';
+    }
+    
+    // 恢复按钮状态
+    if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '保存';
+    }
+    
+    // 切换回显示模式（隐藏编辑区域，显示显示区域）
+    editDiv.style.display = 'none';
+    displayDiv.style.display = 'block';
+}
+
+/**
+ * 抽屉备注内联编辑功能
+ */
+function toggleDrawerNotesEdit(buttonEl) {
+    const notesContainer = buttonEl.closest('.drawer-order-notes-compact');
+    if (!notesContainer) return;
+    
+    const orderNumber = notesContainer.dataset.orderNumber;
+    if (!orderNumber) return;
+    
+    const displayDiv = notesContainer.querySelector('.drawer-notes-display');
+    const editDiv = notesContainer.querySelector('.drawer-notes-edit');
+    const textarea = editDiv.querySelector('.drawer-notes-input');
+    
+    if (editDiv.style.display === 'none') {
+        // 切换到编辑模式
+        displayDiv.style.display = 'none';
+        editDiv.style.display = 'block';
+        
+        // 设置初始值
+        const notesText = displayDiv.querySelector('.drawer-notes-text');
+        if (notesText && notesText.textContent !== '-') {
+            textarea.value = notesText.textContent;
+        } else {
+            textarea.value = '';
+        }
+        
+        // 聚焦并选中
+        setTimeout(() => {
+            textarea.focus();
+            textarea.select();
+        }, 10);
+        
+        // 添加回车键保存（Ctrl+Enter 或 Cmd+Enter）
+        textarea.onkeydown = function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                const saveBtn = editDiv.querySelector('.drawer-notes-save-btn');
+                if (saveBtn && !saveBtn.disabled) {
+                    saveDrawerNotes(saveBtn);
+                }
+            }
+            // ESC 取消
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                const cancelBtn = editDiv.querySelector('.drawer-notes-cancel-btn');
+                if (cancelBtn) {
+                    cancelDrawerNotesEdit(cancelBtn);
+                }
+            }
+        };
+    } else {
+        // 切换到显示模式
+        editDiv.style.display = 'none';
+        displayDiv.style.display = 'block';
+    }
+}
+
+function saveDrawerNotes(buttonEl) {
+    const notesContainer = buttonEl.closest('.drawer-order-notes-compact');
+    if (!notesContainer) return;
+    
+    const orderNumber = notesContainer.dataset.orderNumber;
+    if (!orderNumber) return;
+    
+    const textarea = notesContainer.querySelector('.drawer-notes-input');
+    const notes = textarea.value.trim();
+    const displayDiv = notesContainer.querySelector('.drawer-notes-display');
+    const editDiv = notesContainer.querySelector('.drawer-notes-edit');
+    const notesText = displayDiv.querySelector('.drawer-notes-text');
+    
+    // 禁用按钮，显示加载状态
+    buttonEl.disabled = true;
+    buttonEl.textContent = '保存中...';
+    
+    // 调用 API 更新备注
+    fetch(`/tracking/api/orders/${encodeURIComponent(orderNumber)}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            notes: notes
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // 更新显示内容
+            if (notes) {
+                notesText.textContent = notes;
+            } else {
+                notesText.textContent = '-';
+            }
+            
+            // 恢复按钮状态
+            buttonEl.disabled = false;
+            buttonEl.textContent = '保存';
+            
+            // 切换回显示模式（隐藏编辑区域，显示显示区域）
+            editDiv.style.display = 'none';
+            displayDiv.style.display = 'block';
+            
+            // 同步更新主表格中对应行的备注显示
+            updateTableNotesAfterSave(orderNumber, notes);
+            
+            showToast('成功', '備註已保存');
+        } else {
+            showToast('错误', data.error || '保存失敗');
+            buttonEl.disabled = false;
+            buttonEl.textContent = '保存';
+        }
+    })
+    .catch(err => {
+        console.error('Error saving drawer notes:', err);
+        showToast('错误', '網絡錯誤');
+        buttonEl.disabled = false;
+        buttonEl.textContent = '保存';
+    });
+}
+
+function cancelDrawerNotesEdit(buttonEl) {
+    const notesContainer = buttonEl.closest('.drawer-order-notes-compact');
+    if (!notesContainer) return;
+    
+    const displayDiv = notesContainer.querySelector('.drawer-notes-display');
+    const editDiv = notesContainer.querySelector('.drawer-notes-edit');
+    const textarea = editDiv.querySelector('.drawer-notes-input');
+    const saveBtn = editDiv.querySelector('.drawer-notes-save-btn');
+    const notesText = displayDiv.querySelector('.drawer-notes-text');
+    
+    // 恢复原始值
+    if (notesText && notesText.textContent !== '-') {
+        textarea.value = notesText.textContent;
+    } else {
+        textarea.value = '';
+    }
+    
+    // 恢复按钮状态
+    if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '保存';
+    }
+    
+    // 切换回显示模式（隐藏编辑区域，显示显示区域）
+    editDiv.style.display = 'none';
+    displayDiv.style.display = 'block';
+}
+
+/**
+ * 更新主表格中对应行的备注显示（保存后同步）
+ */
+function updateTableNotesAfterSave(orderNumber, notes) {
+    const row = document.querySelector(`tr[data-order-number="${orderNumber}"]`);
+    if (!row) return;
+    
+    const notesCell = row.querySelector('.order-notes');
+    if (!notesCell) return;
+    
+    const displayDiv = notesCell.querySelector('.notes-display');
+    if (!displayDiv) return;
+    
+    // 更新显示内容
+    if (notes) {
+        const displayText = notes.length > 30 ? notes.substring(0, 30) + '...' : notes;
+        // 转义 HTML 特殊字符
+        const escapedNotes = notes.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const escapedDisplay = displayText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        displayDiv.innerHTML = `<span class="notes-preview" title="${escapedNotes}">${escapedDisplay}</span>`;
+    } else {
+        displayDiv.innerHTML = '<span class="notes-empty">-</span>';
+    }
+}
+
+/**
+ * 更新右侧抽屉的备注显示（保存后同步）
+ */
+function updateDrawerNotesAfterSave(orderNumber, notes) {
+    const drawerNotesEl = document.getElementById('drawerOrderNotes');
+    if (!drawerNotesEl) return;
+    
+    // 检查抽屉是否打开（通过检查订单号是否匹配）
+    if (drawerNotesEl.dataset.orderNumber !== orderNumber) return;
+    
+    const notesText = drawerNotesEl.querySelector('.drawer-notes-text');
+    if (notesText) {
+        if (notes) {
+            notesText.textContent = notes;
+        } else {
+            notesText.textContent = '-';
+        }
+    }
 }
 
 /**
@@ -2968,7 +3932,7 @@ function setupOrderNumberValidation(input, isNewMode) {
                 .then(data => {
                     if (data.exists) {
                         if (errorDiv) {
-                            errorDiv.textContent = '❌ ' + data.message;
+                            errorDiv.textContent = '错误：' + data.message;
                             errorDiv.style.display = 'block';
                         }
                     } else {
@@ -3008,7 +3972,7 @@ function toggleOrderNumberEdit() {
                     .then(data => {
                         if (data.exists) {
                             if (errorDiv) {
-                                errorDiv.textContent = '❌ ' + data.message;
+                                errorDiv.textContent = '错误：' + data.message;
                                 errorDiv.style.display = 'block';
                             }
                         } else {
@@ -3187,7 +4151,8 @@ function confirmEditOrder() {
  * 从抽屉取消订单（使用 Modal）
  */
 function cancelOrderFromDrawer() {
-    const orderNumber = document.getElementById('drawerOrderNumber').textContent.replace('#', '').trim();
+    const drawerTimeline = document.getElementById('drawerTimeline');
+    const orderNumber = drawerTimeline ? drawerTimeline.dataset.orderNumber : null;
     if (!orderNumber) {
         showToast('错误', '无法获取订单号');
         return;
@@ -3280,29 +4245,20 @@ function updateOrderRowAfterUndo(orderNumber, orderData) {
     row.dataset.stageGroup = stageGroup;
     row.className = orderData.status_light;
     
-    // 更新灯号
+    // 更新灯号（使用 SVG 图标）
     const lightCell = row.querySelector('.light');
     if (lightCell) {
-        let lightEmoji = '🟢';
-        if (orderData.status_light === 'red') lightEmoji = '🔴';
-        else if (orderData.status_light === 'yellow') lightEmoji = '🟡';
-        else if (orderData.current_status === STATUS.CANCELLED) lightEmoji = '⚫';
-        lightCell.textContent = lightEmoji;
+        let lightType = 'green';
+        if (orderData.status_light === 'red') lightType = 'red';
+        else if (orderData.status_light === 'yellow') lightType = 'yellow';
+        else if (orderData.current_status === STATUS.CANCELLED) lightType = 'black';
+        lightCell.innerHTML = getStatusLightIcon(lightType);
     }
     
     // 更新阶段显示 - 使用STATUS_SYSTEM
-    const stageInfo = row.querySelector('.stage-info');
-    if (stageInfo) {
-        let stageMajor = '📋 其他';
-        if (stageGroup !== 'all') {
-            const stageGroupData = STAGE_GROUPS[stageGroup];
-            if (stageGroupData) {
-                stageMajor = `${stageGroupData.icon} ${displayStatus(stageGroupData.name)}`;
-            }
-        }
-        
-        stageInfo.querySelector('.stage-major').textContent = stageMajor;
-        stageInfo.querySelector('.stage-current').textContent = displayStatus(orderData.current_status);
+    const stageCurrent = row.querySelector('.stage-current');
+    if (stageCurrent) {
+        stageCurrent.textContent = displayStatus(orderData.current_status);
     }
     
     // 更新等待天数
@@ -3321,6 +4277,13 @@ function updateOrderRowAfterUndo(orderNumber, orderData) {
     if (typeof applyFilters === 'function') {
         applyFilters();
     }
+    
+    // 高亮显示订单行
+    setTimeout(() => {
+        if (typeof highlightOrderRow === 'function') {
+            highlightOrderRow(orderNumber);
+        }
+    }, 200);
 }
 
 /**
@@ -3338,12 +4301,25 @@ function updateFilterCounts() {
         production: 0,
         waiting_confirm: 0,  // 等国外确认（虚拟筛选器）
         completed: 0,
-        cancelled: 0
+        cancelled: 0,
+        red: 0,
+        yellow: 0,
+        green: 0
     };
+
+    // 圖稿階段子狀態計數（图稿制作中 / 图稿待确认 / 图稿修改中）
+    const draftStatusCounts = {};
+    if (typeof STATUS !== 'undefined') {
+        draftStatusCounts[STATUS.DRAFT_MAKING] = 0;
+        draftStatusCounts[STATUS.DRAFT_CONFIRMING] = 0;
+        draftStatusCounts[STATUS.DRAFT_REVISING] = 0;
+    }
     
     allRows.forEach(row => {
-        const status = row.dataset.status || ''; // 简体状态
+        const statusRaw = row.dataset.status || '';
+        const status = normalizeStatusForLogic(statusRaw); // 用於邏輯的狀態（簡體）
         const stageGroup = row.dataset.stageGroup || '';
+        const light = row.dataset.light || '';
         
         // 使用 STATUS_SYSTEM.js 获取阶段分组（如果可用）
         let actualStageGroup = stageGroup;
@@ -3351,14 +4327,26 @@ function updateFilterCounts() {
             actualStageGroup = getStageGroup(status);
         }
         
-        // 统计进行中的订单（排除已完成和已取消）
-        if (status !== STATUS.COMPLETED && status !== STATUS.CANCELLED) {
+        // 统计进行中的订单（排除已完成和已取消）- 使用 key 判断
+        const completedKey = STATUS.COMPLETED;  // 现在是 'COMPLETED'
+        const cancelledKey = STATUS.CANCELLED;  // 现在是 'CANCELLED'
+        if (status !== completedKey && status !== cancelledKey) {
             counts.all++;
             
             // 统计各阶段的数量（只统计进行中的订单）
             if (actualStageGroup && counts.hasOwnProperty(actualStageGroup)) {
                 counts[actualStageGroup]++;
             }
+
+            // 如果是圖稿階段，細分三個子狀態
+            if (actualStageGroup === 'draft' && draftStatusCounts.hasOwnProperty(status)) {
+                draftStatusCounts[status] = (draftStatusCounts[status] || 0) + 1;
+            }
+            
+            // 统计燈號（只統計進行中的訂單）
+            if (light === 'red') counts.red++;
+            else if (light === 'yellow') counts.yellow++;
+            else if (light === 'green') counts.green++;
         }
         
         // 特殊处理：等国外确认（虚拟筛选器 - 使用新的 isStatusInFilter 函数）
@@ -3388,6 +4376,17 @@ function updateFilterCounts() {
         if (elem) elem.textContent = count;
     };
     
+    // 更新统计卡片
+    updateCount('#totalOrders', counts.all);
+    updateCount('#redOrders', counts.red);
+    updateCount('#yellowOrders', counts.yellow);
+    updateCount('#greenOrders', counts.green);
+    
+    // 更新燈號篩選按鈕的計數
+    updateCount('#lightCountRed', counts.red);
+    updateCount('#lightCountYellow', counts.yellow);
+    updateCount('#lightCountGreen', counts.green);
+    
     // 更新各个按钮的计数
     updateCount('.stage-btn.active .stage-count', counts.all);
     updateCount('#newAndQuoteCount', counts.new_and_quote);
@@ -3399,25 +4398,67 @@ function updateFilterCounts() {
     updateCount('#completedCount', counts.completed);
     updateCount('#cancelledCount', counts.cancelled);
     
-    // 更新子状态计数（如果存在）
-    if (typeof STAGE_GROUPS !== 'undefined' && typeof getStatusesByStageGroup === 'function') {
-        // 更新打样阶段的子状态计数
-        const samplingStatuses = getStatusesByStageGroup('sampling') || [];
-        samplingStatuses.forEach(status => {
-            const count = Array.from(allRows).filter(row => {
-                const rowStatus = row.dataset.status || '';
-                return rowStatus === status;
+    // ==================== 更新所有階段的子狀態計數（統一處理）====================
+    if (typeof STATUS !== 'undefined') {
+        // 1. 新訂單/詢價階段
+        const newQuoteIdMap = {};
+        newQuoteIdMap[STATUS.NEW_ORDER] = '#new_and_quote-new-count';
+        newQuoteIdMap[STATUS.QUOTE_CONFIRMING] = '#new_and_quote-quoting-count';
+        
+        Object.keys(newQuoteIdMap).forEach(statusKey => {
+            const selector = newQuoteIdMap[statusKey];
+            const value = Array.from(allRows).filter(row => {
+                const rowStatus = normalizeStatusForLogic(row.dataset.status || '');
+                return rowStatus === statusKey && rowStatus !== STATUS.COMPLETED && rowStatus !== STATUS.CANCELLED;
             }).length;
-            // 更新简体状态计数
-            const statusId = status.replace(/\s+/g, '-').toLowerCase();
-            updateCount(`#sampling-${statusId}-count`, count);
-            // 更新繁体显示状态计数（如果存在）
-            if (typeof displayStatus === 'function') {
-                const displayStatusText = displayStatus(status);
-                const displayStatusId = displayStatusText.replace(/\s+/g, '-').toLowerCase();
-                updateCount(`#sampling-${displayStatusId}-count`, count);
-            }
+            updateCount(selector, value);
         });
+        updateCount('#new_and_quote-all-count', counts.new_and_quote || 0);
+        
+        // 2. 圖稿階段
+        const draftIdMap = {};
+        draftIdMap[STATUS.DRAFT_MAKING] = '#draft-making-count';
+        draftIdMap[STATUS.DRAFT_CONFIRMING] = '#draft-confirm-count';
+        draftIdMap[STATUS.DRAFT_REVISING] = '#draft-revise-count';
+
+        Object.keys(draftIdMap).forEach(statusKey => {
+            const selector = draftIdMap[statusKey];
+            const value = draftStatusCounts[statusKey] || 0;
+            updateCount(selector, value);
+        });
+        updateCount('#draft-all-count', counts.draft || 0);
+        
+        // 3. 打樣階段
+        const samplingIdMap = {};
+        samplingIdMap[STATUS.PENDING_SAMPLE] = '#sampling-pending-count';
+        samplingIdMap[STATUS.SAMPLING] = '#sampling-making-count';
+        samplingIdMap[STATUS.SAMPLE_CONFIRMING] = '#sampling-confirm-count';
+        samplingIdMap[STATUS.SAMPLE_REVISING] = '#sampling-revise-count';
+
+        Object.keys(samplingIdMap).forEach(statusKey => {
+            const selector = samplingIdMap[statusKey];
+            const value = Array.from(allRows).filter(row => {
+                const rowStatus = normalizeStatusForLogic(row.dataset.status || '');
+                return rowStatus === statusKey && rowStatus !== STATUS.COMPLETED && rowStatus !== STATUS.CANCELLED;
+            }).length;
+            updateCount(selector, value);
+        });
+        updateCount('#sampling-all-count', counts.sampling || 0);
+        
+        // 4. 生產階段
+        const productionIdMap = {};
+        productionIdMap[STATUS.PENDING_PRODUCTION] = '#production-pending-count';
+        productionIdMap[STATUS.PRODUCING] = '#production-making-count';
+
+        Object.keys(productionIdMap).forEach(statusKey => {
+            const selector = productionIdMap[statusKey];
+            const value = Array.from(allRows).filter(row => {
+                const rowStatus = normalizeStatusForLogic(row.dataset.status || '');
+                return rowStatus === statusKey && rowStatus !== STATUS.COMPLETED && rowStatus !== STATUS.CANCELLED;
+            }).length;
+            updateCount(selector, value);
+        });
+        updateCount('#production-all-count', counts.production || 0);
     }
 }
 
@@ -3466,6 +4507,24 @@ function restoreFilterState() {
                 }
             }
             
+            // 恢復燈號篩選狀態
+            if (state.lights) {
+                currentFilter.lights = state.lights;
+                // 更新按鈕樣式
+                ['red', 'yellow', 'green'].forEach(light => {
+                    const button = document.getElementById(`lightFilter${light.charAt(0).toUpperCase() + light.slice(1)}`);
+                    if (button) {
+                        if (currentFilter.lights[light]) {
+                            button.classList.add('active');
+                            button.classList.remove('inactive');
+                        } else {
+                            button.classList.remove('active');
+                            button.classList.add('inactive');
+                        }
+                    }
+                });
+            }
+            
             // 应用筛选
             applyFilters();
         } else {
@@ -3490,7 +4549,8 @@ function saveFilterState() {
             stageGroup: currentFilter.stageGroup,
             substatus: currentFilter.substatus,
             showCompleted: currentFilter.showCompleted,
-            showCancelled: currentFilter.showCancelled
+            showCancelled: currentFilter.showCancelled,
+            lights: currentFilter.lights || { red: true, yellow: true, green: true }
         };
         localStorage.setItem('orderFilterState', JSON.stringify(state));
     } catch (err) {
@@ -3500,6 +4560,17 @@ function saveFilterState() {
 
 // 页面加载时自动恢复
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化燈號按鈕狀態（默認全部激活）
+    if (!currentFilter.lights) {
+        currentFilter.lights = { red: true, yellow: true, green: true };
+    }
+    ['red', 'yellow', 'green'].forEach(light => {
+        const button = document.getElementById(`lightFilter${light.charAt(0).toUpperCase() + light.slice(1)}`);
+        if (button && currentFilter.lights[light]) {
+            button.classList.add('active');
+        }
+    });
+    
     restoreFilterState();
     // 转换HTML中硬编码的简体中文为繁体中文
     convertSimplifiedToTraditional();
@@ -3636,7 +4707,7 @@ async function globalSearch() {
         if (result.type === 'search') {
             showToast('🔍 搜索完成', `找到 ${result.total} 条匹配的订单`);
         } else {
-            showToast('📋 已加载', `显示最近 ${result.total} 条订单（所有状态）`);
+            showToast(' 已加载', `显示最近 ${result.total} 条订单（所有状态）`);
         }
         
     } catch (error) {
@@ -3698,18 +4769,18 @@ function createOrderRow(order) {
     tr.dataset.stageGroup = stageGroup;
     
     // 灯号图标
-    let lightEmoji = '🟢';
-    if (order.status_light === 'red') lightEmoji = '🔴';
-    else if (order.status_light === 'yellow') lightEmoji = '🟡';
-    else if (typeof STATUS !== 'undefined' && order.current_status === STATUS.CANCELLED) lightEmoji = '⚫';
+    let lightType = 'green';
+    if (order.status_light === 'red') lightType = 'red';
+    else if (order.status_light === 'yellow') lightType = 'yellow';
+    else if (typeof STATUS !== 'undefined' && order.current_status === STATUS.CANCELLED) lightType = 'black';
     
     // 订单号前缀
     const orderNumberDisplay = order.order_number.startsWith('REV-') 
-        ? `🎨 ${order.order_number}` 
+        ? ` ${order.order_number}` 
         : `#${order.order_number}`;
     
     // 阶段显示 - 使用STATUS_SYSTEM
-    let stageMajor = '📋 其他';
+    let stageMajor = ' 其他';
     if (stageGroup !== 'all') {
         const stageGroupData = STAGE_GROUPS[stageGroup];
         if (stageGroupData) {
@@ -3752,7 +4823,7 @@ function createOrderRow(order) {
         <td class="expand-cell">
             <span class="expand-btn" id="expand-${order.order_number}">▶</span>
         </td>
-        <td class="light">${lightEmoji}</td>
+        <td class="light">${getStatusLightIcon(lightType)}</td>
         <td class="order-date">${order.order_date || '-'}</td>
         <td class="order-no">${orderNumberDisplay}</td>
         <td class="customer">${order.customer_name || '-'}</td>
@@ -3801,7 +4872,7 @@ function clearGlobalSearch() {
         applyFilters();
     }
     
-    showToast('✅ 已返回', '返回进行中订单列表');
+    showToast('已返回', '返回进行中订单列表');
 }
 
 // 获取session role（用于渲染操作列）
@@ -4039,17 +5110,16 @@ function updateOrderRowAfterUpdate(orderNumber, orderData) {
     
     const lightCell = row.querySelector('.light');
     if (lightCell) {
-        let lightEmoji = '🟢';
-        if (orderData.status_light === 'red') lightEmoji = '🔴';
-        else if (orderData.status_light === 'yellow') lightEmoji = '🟡';
-        else if (orderData.current_status === STATUS.CANCELLED) lightEmoji = '⚫';
-        lightCell.textContent = lightEmoji;
+        let lightType = 'green';
+        if (orderData.status_light === 'red') lightType = 'red';
+        else if (orderData.status_light === 'yellow') lightType = 'yellow';
+        else if (orderData.current_status === STATUS.CANCELLED) lightType = 'black';
+        lightCell.innerHTML = getStatusLightIcon(lightType);
     }
     
-    const stageInfo = row.querySelector('.stage-info');
-    if (stageInfo) {
-        stageInfo.querySelector('.stage-major').textContent = getStageName(orderData.current_status);
-        stageInfo.querySelector('.stage-current').textContent = displayStatus(orderData.current_status);
+    const stageCurrent = row.querySelector('.stage-current');
+    if (stageCurrent) {
+        stageCurrent.textContent = displayStatus(orderData.current_status);
     }
     
     const daysSpan = row.querySelector('.days');
@@ -4065,6 +5135,13 @@ function updateOrderRowAfterUpdate(orderNumber, orderData) {
     if (typeof applyFilters === 'function') {
         applyFilters();
     }
+    
+    // 高亮显示订单行
+    setTimeout(() => {
+        if (typeof highlightOrderRow === 'function') {
+            highlightOrderRow(orderNumber);
+        }
+    }, 200);
 }
 
 // ==================== 表格排序功能 ====================
@@ -4208,7 +5285,7 @@ function getCellValue(row, column) {
             
             // 处理订单号（去除 # 符号）
             if (column === 'order_number') {
-                return text.replace(/^#/, '').replace(/^🎨\s*/, '');
+                return text.replace(/^#/, '').replace(/^\s*/, '');
             }
             
             return text;
@@ -4261,11 +5338,11 @@ function refreshAllComponents(orderNumber) {
             }
             
             // 4. 更新时间轴（如果抽屉打开）
-            const drawerOrderNumber = document.getElementById('drawerOrderNumber');
+            const drawerTimeline = document.getElementById('drawerTimeline');
             const drawerOverlay = document.getElementById('detailDrawerOverlay');
-            if (drawerOrderNumber && drawerOverlay && 
+            if (drawerTimeline && drawerOverlay && 
                 drawerOverlay.classList.contains('show') &&
-                drawerOrderNumber.textContent.includes(orderNumber)) {
+                drawerTimeline.dataset.orderNumber === orderNumber) {
                 // 抽屉已打开且显示的是当前订单，重新加载抽屉数据
                 const customerName = document.getElementById('drawerCustomerName').textContent;
                 const statusDays = orderData.status_days || 0;
@@ -4294,3 +5371,116 @@ function refreshAllComponents(orderNumber) {
             console.error('刷新组件失败:', err);
         });
 }
+/**
+ * 抽屜 HTML 結構更新
+ * 移除所有 emoji，使用純 CSS 圖標
+ */
+
+// 更新抽屜頭部結構
+function updateDrawerHeader() {
+    // 這段代碼應該在生成抽屜 HTML 時使用
+    return `
+        <div class="drawer-header">
+            <div class="drawer-header-top">
+                <span class="drawer-title">ORDER DETAILS</span>
+                <button class="drawer-close" onclick="closeDrawer()"></button>
+            </div>
+            <div class="drawer-order-info">
+                <div class="drawer-info-item">
+                    <span class="drawer-info-label">訂單號</span>
+                    <span class="drawer-info-value order-number" id="drawerOrderNumber"></span>
+                </div>
+                <div class="drawer-info-item">
+                    <span class="drawer-info-label">客戶</span>
+                    <span class="drawer-info-value" id="drawerCustomer"></span>
+                </div>
+                <div class="drawer-info-item">
+                    <span class="drawer-info-label">經時間</span>
+                    <span class="drawer-info-value overdue" id="drawerDuration"></span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 更新快速操作區
+function updateQuickActionsSection() {
+    return `
+        <div class="drawer-section">
+            <div class="drawer-section-title">
+                <span class="drawer-section-icon section-icon-quick"></span>
+                快速操作
+            </div>
+            <div class="drawer-actions" id="drawerQuickActions">
+                <!-- 動態生成按鈕 -->
+            </div>
+        </div>
+    `;
+}
+
+// 更新訂單管理區
+function updateManagementSection() {
+    return `
+        <div class="drawer-section">
+            <div class="drawer-section-title">
+                <span class="drawer-section-icon section-icon-manage"></span>
+                訂單管理
+            </div>
+            <div class="drawer-actions" id="drawerManagement">
+                <!-- 編輯和刪除按鈕 -->
+            </div>
+        </div>
+    `;
+}
+
+// 更新時間軸
+function updateTimelineSection() {
+    return `
+        <div class="drawer-timeline-section">
+            <div class="drawer-timeline-title">
+                <span class="timeline-title-icon"></span>
+                完整操作歷史
+            </div>
+            <div class="drawer-timeline" id="drawerTimeline">
+                <!-- 動態生成時間軸 -->
+            </div>
+        </div>
+    `;
+}
+
+// 生成時間軸步驟 HTML（無 emoji）
+function generateTimelineStep(step, index, isLast) {
+    const isCurrent = step.status === 'current';
+    const isCompleted = step.status === 'completed';
+    
+    return `
+        <div class="drawer-step ${isCurrent ? 'current' : ''} ${isCompleted ? 'completed' : ''}">
+            <div class="drawer-step-marker"></div>
+            <div class="drawer-step-content">
+                <div class="drawer-step-header">
+                    <span class="drawer-step-name">${step.name}</span>
+                    <span class="drawer-step-date">${step.date}</span>
+                </div>
+                <div class="drawer-step-meta">
+                    <span class="drawer-step-user">${step.user}</span>
+                    ${step.duration ? `<span class="drawer-step-duration ${step.overdue ? 'overdue' : ''}">${step.duration}</span>` : ''}
+                </div>
+                ${step.notes ? `<div class="drawer-step-notes">${step.notes}</div>` : ''}
+                <div class="drawer-step-actions">
+                    <button class="drawer-edit-btn" onclick="editStep(${index})" title="編輯"></button>
+                    ${!isLast ? '<button class="drawer-copy-btn" onclick="copyStep(' + index + ')" title="複製"></button>' : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 生成快速操作按鈕（無 emoji）
+function generateActionButton(action) {
+    return `
+        <button class="drawer-action-btn ${action.color}" onclick="handleQuickAction('${action.action}')">
+            ${action.label}
+        </button>
+    `;
+}
+

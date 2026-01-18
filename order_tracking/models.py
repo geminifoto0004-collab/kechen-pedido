@@ -12,10 +12,11 @@ except ImportError:
         return f"hash_{password}"
 
 from .config import DATABASE_PATH, LIGHT_RULES
-from .status_config import STATUS
+from .status_config import STATUS  # 向后兼容：简体中文
+from .status_definitions import STATUS_KEYS, get_status_label
 
-# 数据库默认状态值（与 STATUS_SYSTEM.js 保持一致）
-DEFAULT_STATUS = STATUS['NEW_ORDER']
+# 数据库默认状态值（使用 key）
+DEFAULT_STATUS = STATUS_KEYS['NEW_ORDER']
 
 def get_db():
     """获取数据库连接"""
@@ -253,7 +254,10 @@ def init_db():
     conn.close()
 
 def calculate_status_light(order):
-    """计算订单的灯号"""
+    """
+    计算订单的灯号
+    支持新格式（key）和旧格式（中文）的状态值
+    """
     today = date.today()
     current_status = order['current_status']
     last_change = order['last_status_change_date']
@@ -276,71 +280,91 @@ def calculate_status_light(order):
         if (delivery - today).days <= LIGHT_RULES['delivery_warning_days']:
             return 'yellow'
     
-    # 根據狀態和等待天數判斷（使用 status_config.py 中定义的状态，与 STATUS_SYSTEM.js 保持一致）
-    if current_status == STATUS['NEW_ORDER']:
+    # 正規化狀態：如果是中文，轉換成 key；如果已經是 key，直接使用
+    status_key = current_status
+    if current_status not in STATUS_KEYS.values():
+        # 可能是舊的中文狀態，嘗試找到對應的 key
+        for key, label_zh_cn in STATUS.items():
+            if label_zh_cn == current_status:
+                status_key = key
+                break
+        # 如果找不到，可能是未知狀態，返回綠燈
+        if status_key not in STATUS_KEYS.values():
+            return 'green'
+    
+    # 根據狀態 key 和等待天數判斷
+    if status_key == STATUS_KEYS['NEW_ORDER']:
         rules = LIGHT_RULES['new_order']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['QUOTE_CONFIRMING']:
+    elif status_key == STATUS_KEYS['QUOTE_CONFIRMING']:
         rules = LIGHT_RULES['draft_confirm']  # 报价待确认使用图稿确认规则
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['DRAFT_CONFIRMING']:
+    elif status_key == STATUS_KEYS['DRAFT_MAKING']:
+        # 图稿制作中：内部制作阶段，阈值沿用图稿阶段规则
         rules = LIGHT_RULES['draft_confirm']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['DRAFT_REVISING']:
+    elif status_key == STATUS_KEYS['DRAFT_CONFIRMING']:
+        rules = LIGHT_RULES['draft_confirm']
+        if days >= rules['red_days']:
+            return 'red'
+        elif days >= rules['yellow_days']:
+            return 'yellow'
+    
+    elif status_key == STATUS_KEYS['DRAFT_REVISING']:
         rules = LIGHT_RULES['draft_confirm']  # 图稿修改中使用图稿确认规则
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['PENDING_SAMPLE']:
+    elif status_key == STATUS_KEYS['PENDING_SAMPLE']:
         rules = LIGHT_RULES['ready_sample']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['SAMPLING']:
+    elif status_key == STATUS_KEYS['SAMPLING']:
         rules = LIGHT_RULES['sampling_process']
         if rules['red_days'] and days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['SAMPLE_CONFIRMING']:
+    elif status_key == STATUS_KEYS['SAMPLE_CONFIRMING']:
         rules = LIGHT_RULES['sampling_confirm']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['SAMPLE_REVISING']:
+    elif status_key == STATUS_KEYS['SAMPLE_REVISING']:
         rules = LIGHT_RULES['sampling_confirm']  # 打样修改中使用打样确认规则
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['PENDING_PRODUCTION']:
+    elif status_key == STATUS_KEYS['PENDING_PRODUCTION']:
         rules = LIGHT_RULES['ready_production']
         if days >= rules['red_days']:
             return 'red'
         elif days >= rules['yellow_days']:
             return 'yellow'
     
-    elif current_status == STATUS['PRODUCING']:
+    elif status_key == STATUS_KEYS['PRODUCING']:
         rules = LIGHT_RULES['ready_production']  # 生产中待生产规则
         if days >= rules['red_days']:
             return 'red'
@@ -440,3 +464,278 @@ def generate_revision_number():
     conn.close()
     return revision_number
 
+
+# ==================== 新增：數據庫遷移工具 ====================
+# 添加在 models.py 文件末尾
+
+def migrate_database():
+    """
+    執行數據庫遷移
+    添加新表和新欄位，不影響現有數據
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    print("=" * 50)
+    print("開始數據庫遷移...")
+    print("=" * 50)
+    
+    # ===== 檢查並添加 users 表的新欄位 =====
+    try:
+        cursor.execute("SELECT real_name FROM users LIMIT 1")
+        print("[OK] users.real_name 欄位已存在")
+    except:
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN real_name VARCHAR(100)")
+            print("[OK] 成功添加 users.real_name 欄位")
+            
+            # 為現有用戶設置默認值
+            cursor.execute("UPDATE users SET real_name = display_name WHERE real_name IS NULL")
+            conn.commit()
+        except Exception as e:
+            print(f"[WARN] 添加 users.real_name 失敗: {e}")
+    
+    # ===== 添加員工ID欄位（用於顯示，不是主鍵）=====
+    try:
+        cursor.execute("SELECT employee_id FROM users LIMIT 1")
+        print("[OK] users.employee_id 欄位已存在")
+    except:
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN employee_id VARCHAR(20)")
+            print("[OK] 成功添加 users.employee_id 欄位")
+            
+            # 為現有用戶生成員工ID（格式：EMP001, EMP002...）
+            cursor.execute("SELECT id FROM users WHERE employee_id IS NULL OR employee_id = '' ORDER BY id")
+            users = cursor.fetchall()
+            for idx, user in enumerate(users, 1):
+                employee_id = f"EMP{idx:03d}"
+                cursor.execute("UPDATE users SET employee_id = ? WHERE id = ?", (employee_id, user['id']))
+            conn.commit()
+            print("[OK] 已為現有用戶生成員工ID")
+        except Exception as e:
+            print(f"[WARN] 添加 users.employee_id 失敗: {e}")
+    
+    # ===== 添加用戶狀態欄位 =====
+    try:
+        cursor.execute("SELECT status FROM users LIMIT 1")
+        print("[OK] users.status 欄位已存在")
+    except:
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT 'active'")
+            print("[OK] 成功添加 users.status 欄位")
+            
+            # 為現有用戶設置默認值為 active
+            cursor.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+            conn.commit()
+        except Exception as e:
+            print(f"[WARN] 添加 users.status 失敗: {e}")
+    
+    # ===== 添加密碼重置標記欄位 =====
+    try:
+        cursor.execute("SELECT needs_password_reset FROM users LIMIT 1")
+        print("[OK] users.needs_password_reset 欄位已存在")
+    except:
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN needs_password_reset BOOLEAN DEFAULT 0")
+            print("[OK] 成功添加 users.needs_password_reset 欄位")
+            conn.commit()
+        except Exception as e:
+            print(f"[WARN] 添加 users.needs_password_reset 失敗: {e}")
+    
+    # ===== 創建 products 表（M2 會用到）=====
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id VARCHAR(20) UNIQUE NOT NULL,
+            order_number VARCHAR(50) NOT NULL,
+            
+            product_name VARCHAR(200),
+            product_code VARCHAR(50),
+            quantity VARCHAR(50),
+            factory VARCHAR(100),
+            production_type VARCHAR(100),
+            expected_delivery_date DATE,
+            
+            current_status VARCHAR(50) DEFAULT 'new_order',
+            status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status_days INTEGER DEFAULT 0,
+            
+            created_by_id INTEGER,
+            handler_id INTEGER,
+            
+            folder_path VARCHAR(500),
+            notes TEXT,
+            
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (created_by_id) REFERENCES users(id),
+            FOREIGN KEY (handler_id) REFERENCES users(id)
+        )
+    ''')
+    print("[OK] products 表已創建（如果不存在）")
+    
+    # ===== 創建 product_status_history 表 =====
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS product_status_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id VARCHAR(20) NOT NULL,
+            order_number VARCHAR(50),
+            
+            from_status VARCHAR(50),
+            to_status VARCHAR(50) NOT NULL,
+            action_date DATE NOT NULL,
+            
+            operator_id INTEGER,
+            notes TEXT,
+            
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (operator_id) REFERENCES users(id)
+        )
+    ''')
+    print("[OK] product_status_history 表已創建")
+    
+    # ===== 創建 files 表（M3 會用到）=====
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id VARCHAR(20) UNIQUE NOT NULL,
+            order_number VARCHAR(50),
+            product_id VARCHAR(20),
+            
+            filename VARCHAR(500) NOT NULL,
+            file_path VARCHAR(1000) NOT NULL,
+            file_size INTEGER,
+            file_type VARCHAR(100),
+            
+            uploaded_by_id INTEGER,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            is_deleted BOOLEAN DEFAULT 0,
+            deleted_by_id INTEGER,
+            deleted_at TIMESTAMP,
+            
+            FOREIGN KEY (uploaded_by_id) REFERENCES users(id),
+            FOREIGN KEY (deleted_by_id) REFERENCES users(id)
+        )
+    ''')
+    print("[OK] files 表已創建")
+    
+    # ===== 創建 product_handover_log 表（M4 會用到）=====
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS product_handover_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id VARCHAR(20) NOT NULL,
+            order_number VARCHAR(50),
+            
+            from_handler_id INTEGER,
+            to_handler_id INTEGER,
+            handover_by_id INTEGER,
+            
+            handover_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            reason TEXT,
+            
+            FOREIGN KEY (from_handler_id) REFERENCES users(id),
+            FOREIGN KEY (to_handler_id) REFERENCES users(id),
+            FOREIGN KEY (handover_by_id) REFERENCES users(id)
+        )
+    ''')
+    print("[OK] product_handover_log 表已創建")
+    
+    # ===== 創建 operation_logs 表（M5 會用到）=====
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS operation_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            
+            operation_type VARCHAR(50) NOT NULL,
+            operation_desc VARCHAR(500),
+            
+            order_number VARCHAR(50),
+            product_id VARCHAR(20),
+            target_user_id INTEGER,
+            
+            details TEXT,
+            ip_address VARCHAR(50),
+            user_agent VARCHAR(500),
+            
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    ''')
+    print("[OK] operation_logs 表已創建")
+    
+    # ===== 創建 notifications 表（M6 會用到）=====
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            
+            type VARCHAR(50) NOT NULL,
+            title VARCHAR(200) NOT NULL,
+            message TEXT,
+            
+            order_number VARCHAR(50),
+            product_id VARCHAR(20),
+            
+            is_read BOOLEAN DEFAULT 0,
+            read_at TIMESTAMP,
+            
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    ''')
+    print("[OK] notifications 表已創建")
+    
+    # ===== 創建索引 =====
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_products_order ON products(order_number)",
+        "CREATE INDEX IF NOT EXISTS idx_products_handler ON products(handler_id)",
+        "CREATE INDEX IF NOT EXISTS idx_products_status ON products(current_status)",
+        "CREATE INDEX IF NOT EXISTS idx_files_product ON files(product_id)",
+        "CREATE INDEX IF NOT EXISTS idx_files_deleted ON files(is_deleted)",
+        "CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read)",
+    ]
+    
+    for index_sql in indexes:
+        cursor.execute(index_sql)
+    
+    print("[OK] 索引已創建")
+    
+    conn.commit()
+    conn.close()
+    
+    print("=" * 50)
+    print("[OK] 數據庫遷移完成！")
+    print("=" * 50)
+
+
+def check_migration_status():
+    """檢查遷移狀態"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 檢查新表是否存在
+    cursor.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' 
+        AND name IN ('products', 'files', 'product_handover_log', 'operation_logs', 'notifications')
+    """)
+    
+    existing_tables = [row['name'] for row in cursor.fetchall()]
+    
+    print("\n檢查遷移狀態:")
+    print("-" * 30)
+    
+    required_tables = ['products', 'files', 'product_handover_log', 'operation_logs', 'notifications']
+    for table in required_tables:
+        if table in existing_tables:
+            print(f"[OK] {table} 表存在")
+        else:
+            print(f"[FAIL] {table} 表不存在")
+    
+    conn.close()

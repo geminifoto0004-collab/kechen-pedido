@@ -41,9 +41,19 @@
                 <div class="info-label">當前狀態</div>
                 <div class="info-value status-badge status-{{ order.current_status }}">
                     <span class="light-emoji">
-                        {% if order.status_light == 'red' %}🔴
-                        {% elif order.status_light == 'yellow' %}🟡
-                        {% else %}🟢{% endif %}
+                        {% if order.status_light == 'red' %}
+                            <svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <circle cx="8" cy="8" r="7" fill="#EF4444" stroke="#DC2626" stroke-width="1"/>
+                            </svg>
+                        {% elif order.status_light == 'yellow' %}
+                            <svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <circle cx="8" cy="8" r="7" fill="#F59E0B" stroke="#D97706" stroke-width="1"/>
+                            </svg>
+                        {% else %}
+                            <svg class="status-light-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <circle cx="8" cy="8" r="7" fill="#22C55E" stroke="#16A34A" stroke-width="1"/>
+                            </svg>
+                        {% endif %}
                     </span>
                     {{ order.current_status }}
                 </div>

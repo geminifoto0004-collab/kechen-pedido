@@ -1,128 +1,70 @@
 """
 订单状态配置 - Python端
-与 STATUS_SYSTEM.js 保持一致
-用于Python后端的状态管理
+从 status_definitions.py 导入统一的状态定义
+用于Python后端的状态管理（保持向后兼容）
 """
 
-# ==================== 状态名称常量（简体 - 数据库存储用）====================
-STATUS = {
-    # 新订单/询价阶段
-    'NEW_ORDER': '新订单',
-    'QUOTE_CONFIRMING': '报价待确认',
-    
-    # 图稿阶段
-    'DRAFT_CONFIRMING': '图稿待确认',
-    'DRAFT_REVISING': '图稿修改中',
-    
-    # 打样阶段
-    'PENDING_SAMPLE': '待打样',
-    'SAMPLING': '打样中',
-    'SAMPLE_CONFIRMING': '打样待确认',  # ← 已改为"待确认"
-    'SAMPLE_REVISING': '打样修改中',
-    
-    # 生产阶段
-    'PENDING_PRODUCTION': '待生产',
-    'PRODUCING': '生产中',
-    
-    # 最终状态
-    'COMPLETED': '已完成',
-    'CANCELLED': '已取消'
-}
+from .status_definitions import (
+    STATUS_KEYS,
+    STATUS_LABELS,
+    STAGE_GROUPS,
+    STATUS_FLOW_ORDER,
+    QUICK_ACTIONS_MAP,
+    get_status_label,
+    get_stage_group,
+    get_statuses_by_stage_group,
+    is_status_in_group,
+    STATUS  # 向后兼容：旧的 STATUS 字典（key -> 简体中文）
+)
 
-# ==================== 阶段分组 ====================
-STAGE_GROUPS = {
-    'new_and_quote': {
-        'name': '新订单/询价',
-        'statuses': [STATUS['NEW_ORDER'], STATUS['QUOTE_CONFIRMING']],
-        'icon': '📝',
-        'color': '#8b5cf6'
-    },
-    # 等国外确认/询价 - 包含所有需要国外确认的状态（虚拟筛选器）
-    'waiting_confirm': {
-        'name': '等国外确认/询价',
-        'statuses': [STATUS['QUOTE_CONFIRMING'], STATUS['DRAFT_CONFIRMING'], STATUS['SAMPLE_CONFIRMING']],
-        'icon': '⏳',
-        'color': '#f59e0b',
-        'is_filter': True  # 标记为虚拟筛选器
-    },
-    'draft': {
-        'name': '图稿阶段',
-        'statuses': [STATUS['DRAFT_CONFIRMING'], STATUS['DRAFT_REVISING']],
-        'icon': '🎨',
-        'color': '#3b82f6'
-    },
-    'sampling': {
-        'name': '打样阶段',
-        'statuses': [
-            STATUS['PENDING_SAMPLE'],
-            STATUS['SAMPLING'],
-            STATUS['SAMPLE_CONFIRMING'],  # ← 打样待确认
-            STATUS['SAMPLE_REVISING']
-        ],
-        'icon': '🧪',
-        'color': '#06b6d4'
-    },
-    'production': {
-        'name': '生产阶段',
-        'statuses': [STATUS['PENDING_PRODUCTION'], STATUS['PRODUCING']],
-        'icon': '🏭',
-        'color': '#10b981'
-    },
-    'completed': {
-        'name': '已完成',
-        'statuses': [STATUS['COMPLETED']],
-        'icon': '✅',
-        'color': '#22c55e'
-    },
-    'cancelled': {
-        'name': '已取消',
-        'statuses': [STATUS['CANCELLED']],
-        'icon': '❌',
-        'color': '#ef4444'
+# ==================== 向后兼容：生成旧的 STAGE_GROUPS 格式 ====================
+# 旧的格式：statuses 是中文文字列表
+# 新代码应该直接使用 status_definitions.STAGE_GROUPS（status_keys 是 key 列表）
+_STAGE_GROUPS_LEGACY = {}
+for group_name, group in STAGE_GROUPS.items():
+    _STAGE_GROUPS_LEGACY[group_name] = {
+        'name': group['name_zh_cn'],  # 保持简体中文
+        'statuses': [get_status_label(key, 'zh_cn') for key in group['status_keys']],
+        'icon': group.get('icon', ''),
+        'color': group.get('color', '#666666')
     }
-}
+    if 'is_filter' in group:
+        _STAGE_GROUPS_LEGACY[group_name]['is_filter'] = group['is_filter']
 
-# ==================== 工具函数 ====================
+STAGE_GROUPS = _STAGE_GROUPS_LEGACY  # 保持向后兼容
+
+# ==================== 向后兼容：STATUS_MAP（action -> 简体中文）====================
+STATUS_MAP = {}
+for action, status_key in QUICK_ACTIONS_MAP.items():
+    STATUS_MAP[action] = get_status_label(status_key, 'zh_cn')
+
+# ==================== 工具函数（向后兼容）====================
 
 def get_stage_group(status):
-    """根据状态获取所属阶段"""
-    for group_name, group in STAGE_GROUPS.items():
-        if status in group['statuses']:
-            return group_name
+    """
+    根据状态获取所属阶段（向后兼容）
+    
+    支持：
+    - 新格式：status 是 key（如 'NEW_ORDER'）
+    - 旧格式：status 是中文文字（如 '新订单'）
+    """
+    # 如果是 key，直接用新函数
+    if status in STATUS_KEYS.values():
+        return get_stage_group(status)
+    
+    # 如果是中文，先找到对应的 key
+    for key, label_zh_cn in STATUS.items():
+        if label_zh_cn == status:
+            return get_stage_group(key)
+    
     return 'all'
 
 def get_statuses_by_stage_group(stage_group):
-    """获取某个阶段的所有状态"""
+    """
+    获取某个阶段的所有状态（向后兼容）
+    返回简体中文列表
+    """
     if stage_group not in STAGE_GROUPS:
         return []
     return STAGE_GROUPS[stage_group]['statuses']
-
-# ==================== 状态映射（用于API）====================
-# 与 STATUS_SYSTEM.js 中的 QUICK_ACTIONS 保持一致
-STATUS_MAP = {
-    # 新订单/询价阶段
-    'to_quote': STATUS['QUOTE_CONFIRMING'],
-    'skip_to_draft': STATUS['DRAFT_CONFIRMING'],
-    'quote_confirmed': STATUS['DRAFT_CONFIRMING'],
-    
-    # 图稿阶段
-    'draft_confirm': STATUS['PENDING_SAMPLE'],
-    'draft_modify': STATUS['DRAFT_REVISING'],
-    'draft_resent': STATUS['DRAFT_CONFIRMING'],
-    
-    # 打样阶段
-    'sampling_start': STATUS['SAMPLING'],
-    'skip_sampling': STATUS['PENDING_PRODUCTION'],
-    'sampling_sent': STATUS['SAMPLE_CONFIRMING'],  # ← 打样中 → 打样待确认
-    'sampling_confirm': STATUS['PENDING_PRODUCTION'],
-    'sampling_modify': STATUS['SAMPLE_REVISING'],
-    'sampling_restart': STATUS['SAMPLING'],
-    
-    # 生产阶段
-    'production_start': STATUS['PRODUCING'],
-    'production_complete': STATUS['COMPLETED'],
-    
-    # 取消
-    'cancel': STATUS['CANCELLED'],
-}
 

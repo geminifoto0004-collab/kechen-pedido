@@ -78,15 +78,43 @@ async function submitNewOrder() {
         const result = await response.json();
         
         if (result.success) {
+            const orderNumber = result.data?.order_number || formData.order_number;
+            const customerName = result.data?.customer_name || formData.customer_name;
+            
             if (typeof showToast === 'function') {
-                showToast('✅ 訂單創建成功', `訂單 ${formData.order_number} 已創建`);
+                showToast('✅ 訂單創建成功', `訂單 ${orderNumber} 已創建`);
             } else {
                 alert('✅ 訂單創建成功！');
             }
+            
             closeNewOrderModal();
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
+            
+            // 如果右側抽屜功能存在，自動打開並顯示新訂單
+            if (typeof openDetailDrawerFromTimeline === 'function') {
+                // 延遲一下確保資料已保存，然後打開右側抽屜
+                setTimeout(() => {
+                    openDetailDrawerFromTimeline(orderNumber, customerName, 0);
+                    // 同時刷新訂單列表（不刷新整個頁面）
+                    if (typeof refreshAllComponents === 'function') {
+                        refreshAllComponents(orderNumber);
+                    } else if (typeof updateFilterCounts === 'function') {
+                        updateFilterCounts();
+                        // 如果訂單列表存在，重新載入
+                        if (typeof loadOrders === 'function') {
+                            loadOrders();
+                        } else {
+                            location.reload();
+                        }
+                    } else {
+                        location.reload();
+                    }
+                }, 300);
+            } else {
+                // 如果沒有抽屜功能，則刷新頁面
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            }
         } else {
             alert('❌ 創建失敗：' + (result.error || '未知錯誤'));
         }
